@@ -9,6 +9,7 @@ const BASE_BALL_SPEED = 4;
 const SHAPE_SPAWN_TIME = 15000; // 15 seconds
 const POWERUP_DURATION = 15000; // 15 seconds
 const BOSS_HP = 50;
+const SHAPE_SIZE = 280; // 80% of screen coverage
 
 // Color Palette
 const COLORS = {
@@ -204,6 +205,22 @@ class GeometricShape {
 
     rotate(angle) {
         this.rotation += angle;
+    }
+
+    isPointInside(px, py) {
+        const vertices = this.getVertices();
+        let inside = false;
+
+        for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+            const xi = vertices[i].x, yi = vertices[i].y;
+            const xj = vertices[j].x, yj = vertices[j].y;
+
+            const intersect = ((yi > py) !== (yj > py)) &&
+                (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+
+        return inside;
     }
 
     checkCollision(ball) {
@@ -651,8 +668,8 @@ class Game {
             Math.sin(angle) * speed
         ));
 
-        // Create initial shape
-        this.currentShape = new Square(centerX, centerY, 100);
+        // Create initial shape (massive - 80% of screen)
+        this.currentShape = new Square(centerX, centerY, SHAPE_SIZE);
 
         // Add shapes to pool
         this.addShapeToPool();
@@ -692,7 +709,7 @@ class Game {
 
         // Create new shape at current position
         const ShapeClass = nextShape.class;
-        this.currentShape = new ShapeClass(this.currentShape.x, this.currentShape.y, 100);
+        this.currentShape = new ShapeClass(this.currentShape.x, this.currentShape.y, SHAPE_SIZE);
 
         // Remove from pool
         this.shapePool.shift();
@@ -706,18 +723,33 @@ class Game {
 
     generateBlocks() {
         this.blocks = [];
-        const rows = 5;
-        const cols = 10;
-        const padding = 50;
-        const spacing = 10;
-        const blockWidth = (CANVAS_WIDTH - padding * 2 - spacing * (cols - 1)) / cols;
+        if (!this.currentShape) return;
 
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                const x = padding + col * (blockWidth + spacing);
-                const y = padding + row * 50;
-                const isSpecial = Math.random() < 0.15;
-                this.blocks.push(new Block(x, y, isSpecial ? 'special' : 'normal'));
+        const blockSize = 35;
+        const spacing = 8;
+        const gridSize = blockSize + spacing;
+
+        // Calculate grid bounds based on shape size
+        const gridRadius = this.currentShape.size * 0.7; // 70% of shape size for padding
+        const startX = this.currentShape.x - gridRadius;
+        const startY = this.currentShape.y - gridRadius;
+        const endX = this.currentShape.x + gridRadius;
+        const endY = this.currentShape.y + gridRadius;
+
+        // Generate grid of blocks inside the shape
+        for (let x = startX; x < endX; x += gridSize) {
+            for (let y = startY; y < endY; y += gridSize) {
+                const blockCenterX = x + blockSize / 2;
+                const blockCenterY = y + blockSize / 2;
+
+                // Only place block if its center is inside the shape
+                if (this.currentShape.isPointInside(blockCenterX, blockCenterY)) {
+                    const isSpecial = Math.random() < 0.15;
+                    const block = new Block(x, y, isSpecial ? 'special' : 'normal');
+                    block.width = blockSize;
+                    block.height = blockSize;
+                    this.blocks.push(block);
+                }
             }
         }
     }
@@ -912,12 +944,15 @@ class Game {
     moveShapeOnBeat() {
         if (!this.currentShape) return;
 
-        const maxMove = 50;
+        // Reduced movement since shape is massive
+        const maxMove = 20;
         const dx = randomRange(-maxMove, maxMove);
         const dy = randomRange(-maxMove, maxMove);
 
-        const newX = clamp(this.currentShape.x + dx, 150, CANVAS_WIDTH - 150);
-        const newY = clamp(this.currentShape.y + dy, 150, CANVAS_HEIGHT - 150);
+        // Keep shape centered, allowing minimal movement
+        const margin = SHAPE_SIZE + 20; // Shape size + small buffer
+        const newX = clamp(this.currentShape.x + dx, margin, CANVAS_WIDTH - margin);
+        const newY = clamp(this.currentShape.y + dy, margin, CANVAS_HEIGHT - margin);
 
         this.currentShape.x = newX;
         this.currentShape.y = newY;
