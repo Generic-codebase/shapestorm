@@ -23,6 +23,69 @@ const COLORS = {
 };
 
 // ============================================================================
+// SOUND SYSTEM
+// ============================================================================
+
+class SoundSystem {
+    constructor() {
+        this.audioContext = null;
+        this.enabled = true;
+    }
+
+    init() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.log('Web Audio API not supported');
+            this.enabled = false;
+        }
+    }
+
+    playTone(frequency, duration, type = 'sine', volume = 0.3) {
+        if (!this.enabled || !this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        oscillator.type = type;
+        oscillator.frequency.value = frequency;
+
+        gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + duration);
+    }
+
+    blockBreak() {
+        this.playTone(800, 0.1, 'square', 0.2);
+        setTimeout(() => this.playTone(400, 0.1, 'square', 0.15), 50);
+    }
+
+    powerUp() {
+        this.playTone(523.25, 0.1, 'sine', 0.2);
+        setTimeout(() => this.playTone(659.25, 0.1, 'sine', 0.2), 80);
+        setTimeout(() => this.playTone(783.99, 0.15, 'sine', 0.2), 160);
+    }
+
+    wallBounce() {
+        this.playTone(200, 0.05, 'triangle', 0.15);
+    }
+
+    bossHit() {
+        this.playTone(100, 0.2, 'sawtooth', 0.25);
+    }
+
+    shapeReady() {
+        this.playTone(440, 0.1, 'sine', 0.15);
+        setTimeout(() => this.playTone(554.37, 0.1, 'sine', 0.15), 100);
+    }
+}
+
+// ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 
@@ -142,6 +205,9 @@ class GeometricShape {
     draw(ctx) {
         const vertices = this.getVertices();
 
+        // Determine color (flash to yellow if shape ready)
+        const displayColor = this.flashReady ? COLORS.yellow : this.color;
+
         // Draw filled shape (transparent center - no fill)
         // ctx.beginPath();
         // ctx.moveTo(vertices[0].x, vertices[0].y);
@@ -158,8 +224,8 @@ class GeometricShape {
             const v2 = vertices[(i + 1) % vertices.length];
 
             if (this.walls[i]) {
-                ctx.strokeStyle = this.color;
-                ctx.lineWidth = 4;
+                ctx.strokeStyle = displayColor;
+                ctx.lineWidth = this.flashReady ? 5 : 4;
             } else {
                 ctx.strokeStyle = this.color + '33';
                 ctx.lineWidth = 2;
@@ -174,8 +240,8 @@ class GeometricShape {
 
             // Glow effect for intact walls
             if (this.walls[i]) {
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = this.color;
+                ctx.shadowBlur = this.flashReady ? 20 : 15;
+                ctx.shadowColor = displayColor;
                 ctx.beginPath();
                 ctx.moveTo(v1.x, v1.y);
                 ctx.lineTo(v2.x, v2.y);
@@ -187,8 +253,8 @@ class GeometricShape {
         // Draw vertices
         vertices.forEach(v => {
             ctx.beginPath();
-            ctx.arc(v.x, v.y, 4, 0, Math.PI * 2);
-            ctx.fillStyle = this.color;
+            ctx.arc(v.x, v.y, this.flashReady ? 5 : 4, 0, Math.PI * 2);
+            ctx.fillStyle = displayColor;
             ctx.fill();
         });
     }
@@ -486,6 +552,52 @@ class PowerUp {
 }
 
 // ============================================================================
+// FLOATING TEXT CLASS (for score display)
+// ============================================================================
+
+class FloatingText {
+    constructor(x, y, text, color = '#fff') {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.lifetime = 1000; // 1 second
+        this.age = 0;
+        this.vy = -2; // Float upward
+    }
+
+    update(deltaTime) {
+        this.age += deltaTime;
+        this.y += this.vy;
+        this.vy *= 0.95; // Slow down
+    }
+
+    draw(ctx) {
+        const alpha = 1 - (this.age / this.lifetime);
+        if (alpha <= 0) return;
+
+        ctx.save();
+        ctx.font = 'bold 20px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = alpha;
+
+        // Glow effect
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.shadowBlur = 0;
+
+        ctx.restore();
+    }
+
+    isDead() {
+        return this.age >= this.lifetime;
+    }
+}
+
+// ============================================================================
 // BOSS CLASS
 // ============================================================================
 
@@ -604,6 +716,11 @@ class Game {
         this.activePowerups = new Map();
         this.boss = null;
         this.bossMode = false;
+        this.floatingTexts = [];
+
+        // Initialize sound system
+        this.soundSystem = new SoundSystem();
+        this.soundSystem.init();
 
         this.mouseX = 0;
         this.mouseY = 0;
@@ -694,8 +811,10 @@ class Game {
             Math.sin(angle) * speed
         ));
 
-        // Create initial shape (massive - 80% of screen)
+        // Create initial shape (massive - 80% of screen, perfectly centered)
         this.currentShape = new Square(centerX, centerY, SHAPE_SIZE);
+        this.currentShape.targetRotation = 0;
+        this.currentShape.rotationVelocity = 0;
 
         // Add shapes to pool
         this.addShapeToPool();
@@ -712,8 +831,10 @@ class Game {
             this.musicDuration = (this.music.duration || 120) * 1000; // Use actual duration or default to 2 min
         }
 
-        // Hide menu
+        // Hide all overlays
         document.getElementById('menu-overlay').classList.remove('active');
+        document.getElementById('gameover-overlay').classList.remove('active');
+        document.getElementById('pause-overlay').classList.remove('active');
 
         this.updateUI();
     }
@@ -738,9 +859,13 @@ class Game {
         // Check if shape is ready
         if (now < nextShape.spawnTime) return;
 
-        // Create new shape at current position
+        // Create new shape at current position (centered)
         const ShapeClass = nextShape.class;
-        this.currentShape = new ShapeClass(this.currentShape.x, this.currentShape.y, SHAPE_SIZE);
+        const centerX = CANVAS_WIDTH / 2;
+        const centerY = CANVAS_HEIGHT / 2;
+        this.currentShape = new ShapeClass(centerX, centerY, SHAPE_SIZE);
+        this.currentShape.targetRotation = 0;
+        this.currentShape.rotationVelocity = 0;
 
         // Remove from pool
         this.shapePool.shift();
@@ -822,6 +947,9 @@ class Game {
                         // Reflect ball
                         this.currentShape.reflectBall(ball, wallIndex);
 
+                        // Play wall bounce sound
+                        this.soundSystem.wallBounce();
+
                         // Break wall if not shielded
                         if (!shieldActive && !regenActive) {
                             this.currentShape.breakWall(wallIndex);
@@ -851,13 +979,22 @@ class Game {
                     }
 
                     if (destroyed) {
-                        this.score += 10 * this.difficulty;
+                        const points = 10 * this.difficulty;
+                        this.score += points;
+
+                        // Play sound effect
+                        this.soundSystem.blockBreak();
+
+                        // Show floating points
+                        const blockPos = block.getWorldPosition(this.currentShape.x, this.currentShape.y, this.currentShape.rotation);
+                        const textX = blockPos.x + block.width / 2;
+                        const textY = blockPos.y + block.height / 2;
+                        this.floatingTexts.push(new FloatingText(textX, textY, '+' + Math.floor(points), COLORS.green));
 
                         // Spawn powerup
                         if (block.type === 'special') {
                             const powerupTypes = ['multiply', 'extra_life', 'shield', 'power', 'regen', 'storm'];
                             const type = randomChoice(powerupTypes);
-                            const blockPos = block.getWorldPosition(this.currentShape.x, this.currentShape.y, this.currentShape.rotation);
                             this.powerups.push(new PowerUp(blockPos.x + block.width / 2, blockPos.y + block.height / 2, type));
                         }
 
@@ -877,7 +1014,14 @@ class Game {
             if (this.boss && !this.boss.defeated) {
                 if (this.boss.checkCollision(ball)) {
                     this.boss.hit();
-                    this.score += 50 * this.difficulty;
+                    const points = 50 * this.difficulty;
+                    this.score += points;
+
+                    // Play boss hit sound
+                    this.soundSystem.bossHit();
+
+                    // Show floating points
+                    this.floatingTexts.push(new FloatingText(this.boss.x, this.boss.y - 50, '+' + Math.floor(points), COLORS.red));
 
                     // Bounce ball
                     const dx = ball.x - this.boss.x;
@@ -897,6 +1041,9 @@ class Game {
             for (let j = this.powerups.length - 1; j >= 0; j--) {
                 const powerup = this.powerups[j];
                 if (powerup.checkCollision(ball)) {
+                    // Play powerup sound
+                    this.soundSystem.powerUp();
+
                     this.activatePowerup(powerup.type);
                     this.powerups.splice(j, 1);
                 }
@@ -913,24 +1060,50 @@ class Game {
             }
         }
 
+        // Update floating texts
+        for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+            this.floatingTexts[i].update(deltaTime);
+
+            // Remove if dead
+            if (this.floatingTexts[i].isDead()) {
+                this.floatingTexts.splice(i, 1);
+            }
+        }
+
         // Update boss
         if (this.boss) {
             this.boss.update(deltaTime);
         }
 
-        // Update shape rotation based on mouse
+        // Update shape rotation with smooth elasticity
         if (this.currentShape) {
+            // Check if next shape in pool is ready - flash current shape
+            const flashInterval = 500; // Flash every 500ms
+            const hasReadyShape = this.shapePool.length > 0 && now >= this.shapePool[0].spawnTime;
+            this.currentShape.flashReady = hasReadyShape && (Math.floor(now / flashInterval) % 2 === 0);
+
+            // Calculate target rotation from mouse
             const dx = this.mouseX - this.currentShape.x;
             const dy = this.mouseY - this.currentShape.y;
             const targetRotation = Math.atan2(dy, dx);
-            const rotationDiff = targetRotation - this.currentShape.rotation;
-            this.currentShape.rotate(rotationDiff * 0.015); // Very slow rotation
 
-            // Move shape on beat
-            if (now - this.lastBeat > this.beatInterval) {
-                this.lastBeat = now;
-                this.moveShapeOnBeat();
-            }
+            // Normalize angle difference to [-PI, PI]
+            let angleDiff = targetRotation - this.currentShape.rotation;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            // Smooth elastic rotation with acceleration
+            const rotationAcceleration = 0.0008; // Very slow acceleration
+            const damping = 0.92; // Elasticity/spring effect
+
+            // Apply acceleration towards target
+            this.currentShape.rotationVelocity += angleDiff * rotationAcceleration;
+
+            // Apply damping for smooth deceleration
+            this.currentShape.rotationVelocity *= damping;
+
+            // Apply velocity to rotation
+            this.currentShape.rotation += this.currentShape.rotationVelocity;
 
             // Regenerate walls if powerup active
             if (this.activePowerups.has('regen')) {
@@ -1089,6 +1262,9 @@ class Game {
         if (this.boss && !this.boss.defeated) {
             this.boss.draw(this.ctx);
         }
+
+        // Draw floating texts (points)
+        this.floatingTexts.forEach(text => text.draw(this.ctx));
     }
 
     updateUI() {
@@ -1112,6 +1288,15 @@ class Game {
             const now = Date.now();
             if (now < shape.spawnTime) {
                 div.classList.add('spawning');
+            } else {
+                // Shape is ready - add flashing class
+                div.classList.add('ready');
+
+                // Play sound when shape becomes ready (only once)
+                if (!shape.readySoundPlayed) {
+                    this.soundSystem.shapeReady();
+                    shape.readySoundPlayed = true;
+                }
             }
 
             div.textContent = shape.type.substring(0, 3).toUpperCase();

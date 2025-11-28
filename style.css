@@ -207,6 +207,25 @@ body {
     to { height: 100%; }
 }
 
+.pool-shape.ready {
+    animation: shapeReady 0.5s ease-in-out infinite;
+    border-color: #ff0;
+    box-shadow: 0 0 15px #ff0;
+}
+
+@keyframes shapeReady {
+    0%, 100% {
+        transform: scale(1);
+        border-color: #ff0;
+        box-shadow: 0 0 15px #ff0;
+    }
+    50% {
+        transform: scale(1.1);
+        border-color: #f80;
+        box-shadow: 0 0 25px #f80;
+    }
+}
+
 /* Overlays */
 .overlay {
     position: absolute;
