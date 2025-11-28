@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shape Storm - Retro Wave Music Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="grid-background"></div>
+
+    <div id="game-container">
+        <div id="ui-overlay">
+            <div id="top-bar">
+                <div id="score-display">
+                    <span class="label">SCORE</span>
+                    <span id="score">0</span>
+                </div>
+                <div id="lives-display">
+                    <span class="label">BALLS</span>
+                    <span id="lives">1</span>
+                </div>
+                <div id="difficulty-display">
+                    <span class="label">DIFFICULTY</span>
+                    <span id="difficulty">1.0x</span>
+                </div>
+            </div>
+
+            <div id="powerups-bar">
+                <div class="label">ACTIVE POWERUPS</div>
+                <div id="active-powerups"></div>
+            </div>
+
+            <div id="shape-pool">
+                <div class="label">SHAPE POOL</div>
+                <div id="pool-shapes"></div>
+            </div>
+        </div>
+
+        <canvas id="game-canvas"></canvas>
+
+        <div id="menu-overlay" class="overlay active">
+            <div class="menu-content">
+                <h1 class="game-title">SHAPE STORM</h1>
+                <div class="subtitle">A RETRO WAVE MUSIC GAME</div>
+
+                <div id="high-score-display">
+                    <span class="label">HIGH SCORE:</span>
+                    <span id="high-score">0</span>
+                </div>
+
+                <div class="menu-buttons">
+                    <button id="start-btn" class="neon-btn">START GAME</button>
+                    <button id="difficulty-btn" class="neon-btn">DIFFICULTY: NORMAL</button>
+                </div>
+
+                <div class="controls-info">
+                    <div class="control-item">
+                        <span class="key">MOUSE</span>
+                        <span>Rotate Shape</span>
+                    </div>
+                    <div class="control-item">
+                        <span class="key">SPACE</span>
+                        <span>Swap Shape</span>
+                    </div>
+                    <div class="control-item">
+                        <span class="key">ESC</span>
+                        <span>Pause</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="pause-overlay" class="overlay">
+            <div class="menu-content">
+                <h2>PAUSED</h2>
+                <div class="menu-buttons">
+                    <button id="resume-btn" class="neon-btn">RESUME</button>
+                    <button id="menu-btn" class="neon-btn">MAIN MENU</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="gameover-overlay" class="overlay">
+            <div class="menu-content">
+                <h2>GAME OVER</h2>
+                <div id="final-score-display">
+                    <span class="label">FINAL SCORE:</span>
+                    <span id="final-score">0</span>
+                </div>
+                <div id="new-high-score" class="hidden">NEW HIGH SCORE!</div>
+                <div class="menu-buttons">
+                    <button id="restart-btn" class="neon-btn">PLAY AGAIN</button>
+                    <button id="menu2-btn" class="neon-btn">MAIN MENU</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="game-music" loop></audio>
+
+    <script src="game.js"></script>
+</body>
+</html>
