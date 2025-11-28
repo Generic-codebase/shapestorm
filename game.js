@@ -5,7 +5,7 @@
 // Game Constants
 const CANVAS_WIDTH = 900;
 const CANVAS_HEIGHT = 700;
-const BASE_BALL_SPEED = 4;
+const BASE_BALL_SPEED = 2.5; // Slower for better control
 const SHAPE_SPAWN_TIME = 15000; // 15 seconds
 const POWERUP_DURATION = 15000; // 15 seconds
 const BOSS_HP = 50;
@@ -142,15 +142,15 @@ class GeometricShape {
     draw(ctx) {
         const vertices = this.getVertices();
 
-        // Draw filled shape
-        ctx.beginPath();
-        ctx.moveTo(vertices[0].x, vertices[0].y);
-        for (let i = 1; i < vertices.length; i++) {
-            ctx.lineTo(vertices[i].x, vertices[i].y);
-        }
-        ctx.closePath();
-        ctx.fillStyle = this.color + '11';
-        ctx.fill();
+        // Draw filled shape (transparent center - no fill)
+        // ctx.beginPath();
+        // ctx.moveTo(vertices[0].x, vertices[0].y);
+        // for (let i = 1; i < vertices.length; i++) {
+        //     ctx.lineTo(vertices[i].x, vertices[i].y);
+        // }
+        // ctx.closePath();
+        // ctx.fillStyle = this.color + '11';
+        // ctx.fill();
 
         // Draw walls
         for (let i = 0; i < vertices.length; i++) {
@@ -346,9 +346,10 @@ class Octagon extends GeometricShape {
 // ============================================================================
 
 class Block {
-    constructor(x, y, type = 'normal') {
-        this.x = x;
-        this.y = y;
+    constructor(x, y, type = 'normal', shapeX = 0, shapeY = 0) {
+        // Store relative position to shape center
+        this.relativeX = x - shapeX;
+        this.relativeY = y - shapeY;
         this.width = 40;
         this.height = 40;
         this.type = type; // 'normal' or 'special' (drops powerup)
@@ -357,19 +358,39 @@ class Block {
         this.destroyed = false;
     }
 
-    draw(ctx) {
+    getWorldPosition(shapeX, shapeY, shapeRotation) {
+        // Transform relative position based on shape rotation
+        const cos = Math.cos(shapeRotation);
+        const sin = Math.sin(shapeRotation);
+
+        const rotatedX = this.relativeX * cos - this.relativeY * sin;
+        const rotatedY = this.relativeX * sin + this.relativeY * cos;
+
+        return {
+            x: shapeX + rotatedX,
+            y: shapeY + rotatedY
+        };
+    }
+
+    draw(ctx, shapeX, shapeY, shapeRotation) {
         if (this.destroyed) return;
 
+        const pos = this.getWorldPosition(shapeX, shapeY, shapeRotation);
+
+        ctx.save();
+        ctx.translate(pos.x + this.width / 2, pos.y + this.height / 2);
+        ctx.rotate(shapeRotation);
+
         ctx.fillStyle = this.color + '44';
-        ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
 
         ctx.strokeStyle = this.color;
         ctx.lineWidth = 2;
-        ctx.strokeRect(this.x, this.y, this.width, this.height);
+        ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
 
         ctx.shadowBlur = 10;
         ctx.shadowColor = this.color;
-        ctx.strokeRect(this.x, this.y, this.width, this.height);
+        ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
         ctx.shadowBlur = 0;
 
         // HP indicator for special blocks
@@ -377,17 +398,22 @@ class Block {
             ctx.fillStyle = '#fff';
             ctx.font = '12px Orbitron';
             ctx.textAlign = 'center';
-            ctx.fillText(this.hp, this.x + this.width / 2, this.y + this.height / 2 + 4);
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.hp, 0, 0);
         }
+
+        ctx.restore();
     }
 
-    checkCollision(ball) {
+    checkCollision(ball, shapeX, shapeY, shapeRotation) {
         if (this.destroyed) return false;
 
-        return ball.x + ball.radius > this.x &&
-               ball.x - ball.radius < this.x + this.width &&
-               ball.y + ball.radius > this.y &&
-               ball.y - ball.radius < this.y + this.height;
+        const pos = this.getWorldPosition(shapeX, shapeY, shapeRotation);
+
+        return ball.x + ball.radius > pos.x &&
+               ball.x - ball.radius < pos.x + this.width &&
+               ball.y + ball.radius > pos.y &&
+               ball.y - ball.radius < pos.y + this.height;
     }
 
     hit() {
@@ -678,8 +704,13 @@ class Game {
         // Generate blocks
         this.generateBlocks();
 
-        // Start music (in a real game, you'd load an actual audio file)
+        // Start music
         this.musicStartTime = Date.now();
+        if (this.music.src) {
+            this.music.currentTime = 0;
+            this.music.play().catch(e => console.log('Audio play failed:', e));
+            this.musicDuration = (this.music.duration || 120) * 1000; // Use actual duration or default to 2 min
+        }
 
         // Hide menu
         document.getElementById('menu-overlay').classList.remove('active');
@@ -745,7 +776,7 @@ class Game {
                 // Only place block if its center is inside the shape
                 if (this.currentShape.isPointInside(blockCenterX, blockCenterY)) {
                     const isSpecial = Math.random() < 0.15;
-                    const block = new Block(x, y, isSpecial ? 'special' : 'normal');
+                    const block = new Block(x, y, isSpecial ? 'special' : 'normal', this.currentShape.x, this.currentShape.y);
                     block.width = blockSize;
                     block.height = blockSize;
                     this.blocks.push(block);
@@ -803,13 +834,14 @@ class Game {
             const powerBallActive = this.activePowerups.has('power');
             for (let j = this.blocks.length - 1; j >= 0; j--) {
                 const block = this.blocks[j];
-                if (block.checkCollision(ball)) {
+                if (block.checkCollision(ball, this.currentShape.x, this.currentShape.y, this.currentShape.rotation)) {
                     const destroyed = block.hit();
 
                     if (!powerBallActive) {
                         // Bounce ball
-                        const blockCenterX = block.x + block.width / 2;
-                        const blockCenterY = block.y + block.height / 2;
+                        const blockPos = block.getWorldPosition(this.currentShape.x, this.currentShape.y, this.currentShape.rotation);
+                        const blockCenterX = blockPos.x + block.width / 2;
+                        const blockCenterY = blockPos.y + block.height / 2;
 
                         if (Math.abs(ball.x - blockCenterX) > Math.abs(ball.y - blockCenterY)) {
                             ball.vx *= -1;
@@ -825,7 +857,8 @@ class Game {
                         if (block.type === 'special') {
                             const powerupTypes = ['multiply', 'extra_life', 'shield', 'power', 'regen', 'storm'];
                             const type = randomChoice(powerupTypes);
-                            this.powerups.push(new PowerUp(block.x + block.width / 2, block.y + block.height / 2, type));
+                            const blockPos = block.getWorldPosition(this.currentShape.x, this.currentShape.y, this.currentShape.rotation);
+                            this.powerups.push(new PowerUp(blockPos.x + block.width / 2, blockPos.y + block.height / 2, type));
                         }
 
                         this.blocks.splice(j, 1);
@@ -891,7 +924,7 @@ class Game {
             const dy = this.mouseY - this.currentShape.y;
             const targetRotation = Math.atan2(dy, dx);
             const rotationDiff = targetRotation - this.currentShape.rotation;
-            this.currentShape.rotate(rotationDiff * 0.05); // Slow rotation
+            this.currentShape.rotate(rotationDiff * 0.015); // Very slow rotation
 
             // Move shape on beat
             if (now - this.lastBeat > this.beatInterval) {
@@ -991,6 +1024,9 @@ class Game {
     endGame(victory) {
         this.state = 'gameover';
 
+        // Stop music
+        this.music.pause();
+
         if (this.score > this.highScore) {
             this.highScore = this.score;
             localStorage.setItem('shapeStormHighScore', this.highScore.toString());
@@ -1006,16 +1042,22 @@ class Game {
 
     pauseGame() {
         this.state = 'paused';
+        this.music.pause();
         document.getElementById('pause-overlay').classList.add('active');
     }
 
     resumeGame() {
         this.state = 'playing';
+        if (this.music.src) {
+            this.music.play().catch(e => console.log('Audio resume failed:', e));
+        }
         document.getElementById('pause-overlay').classList.remove('active');
     }
 
     showMenu() {
         this.state = 'menu';
+        this.music.pause();
+        this.music.currentTime = 0;
         document.getElementById('menu-overlay').classList.add('active');
         document.getElementById('pause-overlay').classList.remove('active');
         document.getElementById('gameover-overlay').classList.remove('active');
@@ -1027,12 +1069,14 @@ class Game {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-        // Draw blocks
-        this.blocks.forEach(block => block.draw(this.ctx));
-
         // Draw current shape
         if (this.currentShape) {
             this.currentShape.draw(this.ctx);
+        }
+
+        // Draw blocks (inside the shape, so they rotate with it)
+        if (this.currentShape) {
+            this.blocks.forEach(block => block.draw(this.ctx, this.currentShape.x, this.currentShape.y, this.currentShape.rotation));
         }
 
         // Draw balls

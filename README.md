@@ -15,12 +15,15 @@ Shape Storm is a unique music-driven arcade game with a stunning retro wave aest
 - **Smooth glow effects** on all game elements
 
 ### Core Gameplay
-- **Music-driven mechanics** - shapes move to the beat
-- **Ball physics** - realistic bouncing and collision
-- **Wall breaking** - walls disappear when hit (unless protected)
+- **Massive rotating container** - Shape covers 80% of screen, acting as a true container
+- **Music-driven mechanics** - Shapes move to the beat
+- **Rotating blocks** - All blocks inside rotate with the shape!
+- **Ball physics** - Realistic bouncing and collision
+- **Wall breaking** - Walls disappear when hit (unless protected)
 - **Multiple geometric shapes** - Triangle, Square, Pentagon, Hexagon, Octagon
-- **Shape rotation** - slow rotation controlled by mouse
-- **Shape swapping** - switch between shapes in your pool
+- **Very slow rotation** - Gentle rotation controlled by mouse movement
+- **Shape swapping** - Switch between shapes in your pool
+- **Transparent center** - See all the action inside the shape
 
 ### Power-Up System
 Destroy special (yellow) blocks to collect powerful powerups:
@@ -112,16 +115,28 @@ No installation, build process, or dependencies required!
 
 The game is designed to work with music tracks. To add your own music:
 
-1. Place an audio file (MP3, OGG, etc.) in the game directory
-2. Update the audio source in `index.html`:
+1. **Download a music file** (MP3, OGG, etc.) and place it in the game directory
+2. **Update the audio source** in `index.html` (line 103):
    ```html
-   <audio id="game-music" src="your-music-file.mp3" loop></audio>
+   <audio id="game-music" src="music.mp3" loop></audio>
    ```
-3. The game will sync shape movements to the beat
+3. The game will automatically:
+   - Play music when you start
+   - Pause music when you pause the game
+   - Stop music when the game ends
+   - Spawn the boss when the music track ends
+   - Sync shape movements to a beat (500ms interval)
 
-Currently, the game uses a simulated beat interval (500ms). For advanced beat detection, consider integrating:
+### Recommended Music Sources (Free & Royalty-Free):
+- **Incompetech** (incompetech.com) - Great for synthwave tracks
+- **Free Music Archive** (freemusicarchive.org) - Filter by "Electronic" genre
+- **YouTube Audio Library** - Search for "retrowave" or "synthwave"
+- **Pixabay Music** (pixabay.com/music) - Free to use
+
+### For Advanced Beat Detection:
 - **Web Audio API analyser** for real-time beat detection
 - **Pre-processed beat maps** for precise timing
+- Modify `this.beatInterval` in game.js to match your track's BPM
 
 ## 🎮 Game Tips
 
@@ -145,7 +160,7 @@ Want to modify the game? Here are some easy tweaks:
 ### In `game.js`:
 ```javascript
 // Change ball speed
-const BASE_BALL_SPEED = 4; // Increase for faster gameplay
+const BASE_BALL_SPEED = 2.5; // Increase for faster gameplay (default: 2.5)
 
 // Change shape spawn time
 const SHAPE_SPAWN_TIME = 15000; // Milliseconds
