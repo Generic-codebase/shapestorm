@@ -1142,6 +1142,298 @@ class Hypercube {
 }
 
 // ============================================================================
+// MENU BACKGROUND
+// ============================================================================
+
+class MenuBackground {
+    constructor() {
+        this.canvas = document.getElementById('menu-background');
+        this.ctx = this.canvas.getContext('2d');
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+
+        this.rotation = 0;
+        this.rotationSpeed = 0.015;
+        this.currentShape = 'cube';
+        this.shapeTimer = 0;
+        this.shapeInterval = 3000;
+        this.shapes = ['cube', 'octahedron', 'diamond', 'star'];
+        this.colorPhase = 0;
+        this.colors = [COLORS.cyan, COLORS.magenta, COLORS.purple, COLORS.yellow];
+
+        // Grid animation
+        this.gridOffset = 0;
+        this.scanlineOffset = 0;
+
+        // Size and position for background hypercube
+        this.size = 200;
+        this.x = this.canvas.width / 2;
+        this.y = this.canvas.height / 2 - 50; // Slightly above center
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            this.canvas.width = window.innerWidth;
+            this.canvas.height = window.innerHeight;
+            this.x = this.canvas.width / 2;
+            this.y = this.canvas.height / 2 - 50;
+        });
+    }
+
+    update(deltaTime) {
+        this.rotation += this.rotationSpeed;
+        this.shapeTimer += deltaTime;
+        this.colorPhase = (this.colorPhase + 0.005) % this.colors.length;
+        this.gridOffset = (this.gridOffset + 0.5) % 100;
+        this.scanlineOffset = (this.scanlineOffset + 2) % this.canvas.height;
+
+        // Morph to next shape
+        if (this.shapeTimer >= this.shapeInterval) {
+            this.shapeTimer = 0;
+            const currentIndex = this.shapes.indexOf(this.currentShape);
+            this.currentShape = this.shapes[(currentIndex + 1) % this.shapes.length];
+        }
+    }
+
+    draw() {
+        const ctx = this.ctx;
+
+        // Clear canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw perspective grid
+        this.drawPerspectiveGrid();
+
+        // Get current color
+        const colorIndex = Math.floor(this.colorPhase);
+        const nextColorIndex = (colorIndex + 1) % this.colors.length;
+        const t = this.colorPhase - colorIndex;
+        const color = this.interpolateColor(
+            this.colors[colorIndex],
+            this.colors[nextColorIndex],
+            t
+        );
+
+        // Draw hypercube with glow
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        // Multiple glow layers for depth
+        ctx.globalAlpha = 0.3;
+        this.drawShape(ctx, color, this.size * 1.3);
+        ctx.globalAlpha = 0.5;
+        this.drawShape(ctx, color, this.size * 1.15);
+        ctx.globalAlpha = 1.0;
+        this.drawShape(ctx, color, this.size);
+
+        ctx.restore();
+
+        // Draw scan lines
+        this.drawScanlines();
+
+        // Draw floating particles
+        this.drawParticles(color);
+    }
+
+    drawShape(ctx, color, size) {
+        switch(this.currentShape) {
+            case 'cube':
+                this.drawCube(ctx, color, size);
+                break;
+            case 'octahedron':
+                this.drawOctahedron(ctx, color, size);
+                break;
+            case 'diamond':
+                this.drawDiamond(ctx, color, size);
+                break;
+            case 'star':
+                this.drawStar(ctx, color, size);
+                break;
+        }
+    }
+
+    drawCube(ctx, color, s) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = color;
+        ctx.strokeRect(-s/2, -s/2, s, s);
+        ctx.strokeRect(-s/3, -s/3, s * 0.66, s * 0.66);
+
+        ctx.beginPath();
+        ctx.moveTo(-s/2, -s/2);
+        ctx.lineTo(-s/3, -s/3);
+        ctx.moveTo(s/2, -s/2);
+        ctx.lineTo(s/3, -s/3);
+        ctx.moveTo(-s/2, s/2);
+        ctx.lineTo(-s/3, s/3);
+        ctx.moveTo(s/2, s/2);
+        ctx.lineTo(s/3, s/3);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    drawOctahedron(ctx, color, s) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = color;
+
+        ctx.beginPath();
+        ctx.moveTo(0, -s);
+        ctx.lineTo(-s, 0);
+        ctx.lineTo(0, s);
+        ctx.lineTo(s, 0);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, -s);
+        ctx.lineTo(0, s);
+        ctx.moveTo(-s, 0);
+        ctx.lineTo(s, 0);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    drawDiamond(ctx, color, s) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = color;
+
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 1.2);
+        ctx.lineTo(-s * 0.7, 0);
+        ctx.lineTo(0, s * 1.2);
+        ctx.lineTo(s * 0.7, 0);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 1.2);
+        ctx.lineTo(0, s * 1.2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    drawStar(ctx, color, s) {
+        const points = 8;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = color;
+
+        ctx.beginPath();
+        for (let i = 0; i < points; i++) {
+            const angle = (Math.PI * 2 * i) / points;
+            const radius = i % 2 === 0 ? s : s / 2;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    drawPerspectiveGrid() {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = COLORS.cyan;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.15;
+
+        // Vertical lines converging to center
+        const centerX = this.canvas.width / 2;
+        const horizonY = this.canvas.height * 0.4;
+        const gridSpacing = 50;
+
+        for (let i = -10; i <= 10; i++) {
+            const x = centerX + (i * gridSpacing) + (this.gridOffset * (i / 5));
+            ctx.beginPath();
+            ctx.moveTo(x, this.canvas.height);
+            ctx.lineTo(centerX, horizonY);
+            ctx.stroke();
+        }
+
+        // Horizontal lines
+        for (let y = this.canvas.height; y > horizonY; y -= 30) {
+            const progress = (this.canvas.height - y) / (this.canvas.height - horizonY);
+            const offset = (this.gridOffset * progress) % 30;
+            ctx.beginPath();
+            ctx.moveTo(0, y - offset);
+            ctx.lineTo(this.canvas.width, y - offset);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    drawScanlines() {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = COLORS.cyan;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.05;
+
+        for (let y = 0; y < this.canvas.height; y += 4) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(this.canvas.width, y);
+            ctx.stroke();
+        }
+
+        // Moving bright scanline
+        ctx.globalAlpha = 0.3;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = COLORS.magenta;
+        ctx.beginPath();
+        ctx.moveTo(0, this.scanlineOffset);
+        ctx.lineTo(this.canvas.width, this.scanlineOffset);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    drawParticles(color) {
+        const ctx = this.ctx;
+        ctx.save();
+
+        // Floating particles
+        for (let i = 0; i < 30; i++) {
+            const x = (i * 73 + this.rotation * 100) % this.canvas.width;
+            const y = (i * 97 + this.rotation * 50) % this.canvas.height;
+            const size = 1 + (i % 3);
+
+            ctx.globalAlpha = 0.3 + Math.sin(this.rotation + i) * 0.2;
+            ctx.fillStyle = color;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = color;
+            ctx.fillRect(x, y, size, size);
+        }
+
+        ctx.restore();
+    }
+
+    interpolateColor(color1, color2, t) {
+        // Simple color interpolation (works for hex colors)
+        // For simplicity, just return color1 (full implementation would blend)
+        return color1;
+    }
+
+    show() {
+        this.canvas.classList.add('active');
+    }
+
+    hide() {
+        this.canvas.classList.remove('active');
+    }
+}
+
+// ============================================================================
 // GAME STATE
 // ============================================================================
 
@@ -1176,8 +1468,13 @@ class Game {
         this.soundSystem = new SoundSystem();
         this.soundSystem.init();
 
+        // Initialize menu background
+        this.menuBackground = new MenuBackground();
+        this.menuBackground.show();
+
         this.mouseX = 0;
         this.mouseY = 0;
+        this.mousePressed = false;
         this.lastShapeSwap = 0;
         this.shapeSpawnTimers = [];
 
@@ -1206,6 +1503,20 @@ class Game {
             const rect = this.canvas.getBoundingClientRect();
             this.mouseX = e.clientX - rect.left;
             this.mouseY = e.clientY - rect.top;
+        });
+
+        // Mouse button tracking for fine-tune rotation control
+        this.canvas.addEventListener('mousedown', (e) => {
+            this.mousePressed = true;
+        });
+
+        this.canvas.addEventListener('mouseup', (e) => {
+            this.mousePressed = false;
+        });
+
+        // Also handle mouse leaving canvas
+        this.canvas.addEventListener('mouseleave', (e) => {
+            this.mousePressed = false;
         });
 
         // Keyboard
@@ -1303,6 +1614,7 @@ class Game {
         document.getElementById('menu-overlay').classList.remove('active');
         document.getElementById('gameover-overlay').classList.remove('active');
         document.getElementById('pause-overlay').classList.remove('active');
+        this.menuBackground.hide();
 
         this.updateUI();
     }
@@ -1432,6 +1744,12 @@ class Game {
     }
 
     update(deltaTime) {
+        // Update menu background when in menu state
+        if (this.state === 'menu') {
+            this.menuBackground.update(deltaTime);
+            return;
+        }
+
         if (this.state !== 'playing') return;
 
         const now = Date.now();
@@ -1493,6 +1811,11 @@ class Game {
                     const wallIndex = collision.wallIndex;
                     const shieldActive = this.activePowerups.has('shield');
                     const regenActive = this.activePowerups.has('regen');
+                    const powerBallActive = this.activePowerups.has('power');
+
+                    // Check if shape is rotating fast enough to act as shield
+                    const rotationSpeedThreshold = 0.05; // Adjust this value for desired sensitivity
+                    const fastRotating = Math.abs(this.currentShape.rotationVelocity) > rotationSpeedThreshold;
 
                     // Track wall contact for stuck ball detection
                     if (ball.lastContactPoint &&
@@ -1512,12 +1835,7 @@ class Game {
                         // Reflect ball with improved physics
                         this.currentShape.reflectBall(ball, wallIndex);
 
-                        // Add curveball effect from rotation
-                        const rotationInfluence = this.currentShape.rotationVelocity * 15;
-                        ball.vx += rotationInfluence * Math.sin(this.currentShape.rotation);
-                        ball.vy -= rotationInfluence * Math.cos(this.currentShape.rotation);
-
-                        // Normalize speed to prevent acceleration
+                        // Normalize speed to prevent acceleration (without rotation influence)
                         const speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
                         const targetSpeed = this.currentBallSpeed * this.difficulty;
                         ball.vx = (ball.vx / speed) * targetSpeed;
@@ -1535,9 +1853,9 @@ class Game {
                         const normalX = nx / len;
                         const normalY = ny / len;
 
-                        // Ensure ball moves away from wall
-                        ball.x += normalX * 3;
-                        ball.y += normalY * 3;
+                        // Ensure ball moves away from wall with increased bounce force
+                        ball.x += normalX * 6;
+                        ball.y += normalY * 6;
 
                         // Play wall bounce sound
                         this.soundSystem.wallBounce();
@@ -1547,8 +1865,9 @@ class Game {
                             this.particles.push(new Particle(ball.x, ball.y, COLORS.cyan));
                         }
 
-                        // Break wall if not shielded
-                        if (!shieldActive && !regenActive) {
+                        // Break wall if not shielded, not rotating fast (unless powerball)
+                        const canDamage = powerBallActive || !fastRotating;
+                        if (!shieldActive && !regenActive && canDamage) {
                             this.currentShape.breakWall(wallIndex);
                         }
 
@@ -1840,23 +2159,39 @@ class Game {
             const dy = this.mouseY - this.currentShape.y;
             const targetRotation = Math.atan2(dy, dx);
 
-            // Normalize angle difference to [-PI, PI]
-            let angleDiff = targetRotation - this.currentShape.rotation;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            if (this.mousePressed) {
+                // Direct rotation control when mouse button is held (fine-tune control)
+                // Normalize angle difference to [-PI, PI]
+                let angleDiff = targetRotation - this.currentShape.rotation;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-            // Smooth elastic rotation with acceleration
-            const rotationAcceleration = 0.0008; // Very slow acceleration
-            const damping = 0.92; // Elasticity/spring effect
+                // Apply rotation directly with smooth interpolation
+                const directControlSpeed = 0.15; // How quickly it follows the mouse
+                this.currentShape.rotation += angleDiff * directControlSpeed;
 
-            // Apply acceleration towards target
-            this.currentShape.rotationVelocity += angleDiff * rotationAcceleration;
+                // Update velocity based on the actual rotation change
+                this.currentShape.rotationVelocity = angleDiff * directControlSpeed;
+            } else {
+                // Elastic rotation when mouse button is not held
+                // Normalize angle difference to [-PI, PI]
+                let angleDiff = targetRotation - this.currentShape.rotation;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-            // Apply damping for smooth deceleration
-            this.currentShape.rotationVelocity *= damping;
+                // Smooth elastic rotation with acceleration
+                const rotationAcceleration = 0.0008; // Very slow acceleration
+                const damping = 0.92; // Elasticity/spring effect
 
-            // Apply velocity to rotation
-            this.currentShape.rotation += this.currentShape.rotationVelocity;
+                // Apply acceleration towards target
+                this.currentShape.rotationVelocity += angleDiff * rotationAcceleration;
+
+                // Apply damping for smooth deceleration
+                this.currentShape.rotationVelocity *= damping;
+
+                // Apply velocity to rotation
+                this.currentShape.rotation += this.currentShape.rotationVelocity;
+            }
 
             // Regenerate walls if powerup active
             if (this.activePowerups.has('regen')) {
@@ -2104,10 +2439,17 @@ class Game {
         document.getElementById('menu-overlay').classList.add('active');
         document.getElementById('pause-overlay').classList.remove('active');
         document.getElementById('gameover-overlay').classList.remove('active');
+        this.menuBackground.show();
         this.updateUI();
     }
 
     draw() {
+        // Draw menu background when in menu state
+        if (this.state === 'menu') {
+            this.menuBackground.draw();
+            return;
+        }
+
         // Clear canvas
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
