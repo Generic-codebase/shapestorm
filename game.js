@@ -5,11 +5,13 @@
 // Game Constants
 const CANVAS_WIDTH = 900;
 const CANVAS_HEIGHT = 700;
-const BASE_BALL_SPEED = 2.5; // Slower for better control
+const BASE_BALL_SPEED = 1.5; // Even slower baseline
+const BALL_SPEED_INCREMENT = 0.15; // Speed increase per level
+const MAX_BALLS = 64; // Maximum balls allowed
 const SHAPE_SPAWN_TIME = 15000; // 15 seconds
 const POWERUP_DURATION = 15000; // 15 seconds
 const BOSS_HP = 50;
-const SHAPE_SIZE = 280; // 80% of screen coverage
+const SHAPE_SIZE = 320; // Larger shape (was 280)
 
 // Color Palette
 const COLORS = {
@@ -768,6 +770,8 @@ class Game {
         this.highScore = parseInt(localStorage.getItem('shapeStormHighScore') || '0');
         this.difficulty = 1.0;
         this.difficultyLevel = 'normal'; // easy, normal, hard
+        this.level = 1;
+        this.currentBallSpeed = BASE_BALL_SPEED;
 
         this.balls = [];
         this.currentShape = null;
@@ -852,6 +856,8 @@ class Game {
     startGame() {
         this.state = 'playing';
         this.score = 0;
+        this.level = 1;
+        this.currentBallSpeed = BASE_BALL_SPEED;
         this.balls = [];
         this.blocks = [];
         this.powerups = [];
@@ -865,7 +871,7 @@ class Game {
         const centerX = CANVAS_WIDTH / 2;
         const centerY = CANVAS_HEIGHT / 2;
         const angle = Math.random() * Math.PI * 2;
-        const speed = BASE_BALL_SPEED * this.difficulty;
+        const speed = this.currentBallSpeed * this.difficulty;
         this.balls.push(new Ball(
             centerX,
             centerY,
@@ -1077,9 +1083,9 @@ class Game {
 
                         this.blocks.splice(j, 1);
 
-                        // Regenerate blocks if all destroyed
+                        // Level progression when all blocks destroyed
                         if (this.blocks.length === 0 && !this.bossMode) {
-                            this.generateBlocks();
+                            this.levelUp();
                         }
                     }
 
@@ -1273,7 +1279,10 @@ class Game {
             case 'multiply':
                 const newBalls = [];
                 this.balls.forEach(ball => {
-                    newBalls.push(ball.clone());
+                    // Only add if under max limit
+                    if (this.balls.length + newBalls.length < MAX_BALLS) {
+                        newBalls.push(ball.clone());
+                    }
                 });
                 this.balls.push(...newBalls);
                 break;
@@ -1290,6 +1299,43 @@ class Game {
         this.updatePowerupsDisplay();
     }
 
+    levelUp() {
+        this.level++;
+        this.currentBallSpeed = BASE_BALL_SPEED + (this.level - 1) * BALL_SPEED_INCREMENT;
+
+        // Clear all powerups
+        this.activePowerups.clear();
+        this.powerups = [];
+
+        // Update ball speeds to new level speed
+        const speedMultiplier = this.currentBallSpeed / BASE_BALL_SPEED;
+        this.balls.forEach(ball => {
+            const currentSpeed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
+            const targetSpeed = BASE_BALL_SPEED * this.difficulty * speedMultiplier;
+            const ratio = targetSpeed / currentSpeed;
+            ball.vx *= ratio;
+            ball.vy *= ratio;
+        });
+
+        // Generate new blocks
+        this.generateBlocks();
+
+        // Add bonus points for level completion
+        this.score += 100 * this.level * this.difficulty;
+
+        // Create celebration particles
+        const centerX = CANVAS_WIDTH / 2;
+        const centerY = CANVAS_HEIGHT / 2;
+        for (let i = 0; i < 50; i++) {
+            this.particles.push(new Particle(centerX, centerY, randomChoice([COLORS.cyan, COLORS.magenta, COLORS.yellow])));
+        }
+
+        // Show level up text
+        this.floatingTexts.push(new FloatingText(centerX, centerY, 'LEVEL ' + this.level, COLORS.yellow));
+
+        this.updateUI();
+    }
+
     spawnBoss() {
         this.bossMode = true;
         this.boss = new Boss();
@@ -1299,8 +1345,8 @@ class Game {
     endGame(victory) {
         this.state = 'gameover';
 
-        // Stop music
-        this.music.pause();
+        // Fade out music
+        this.fadeOutMusic();
 
         if (this.score > this.highScore) {
             this.highScore = this.score;
@@ -1313,6 +1359,18 @@ class Game {
         document.getElementById('final-score').textContent = this.score;
         document.getElementById('gameover-overlay').classList.add('active');
         this.updateUI();
+    }
+
+    fadeOutMusic() {
+        const fadeAudio = setInterval(() => {
+            if (this.music.volume > 0.1) {
+                this.music.volume -= 0.1;
+            } else {
+                clearInterval(fadeAudio);
+                this.music.pause();
+                this.music.volume = 1.0; // Reset for next play
+            }
+        }, 100);
     }
 
     pauseGame() {
@@ -1391,6 +1449,7 @@ class Game {
     updateUI() {
         document.getElementById('score').textContent = Math.floor(this.score);
         document.getElementById('lives').textContent = this.balls.length;
+        document.getElementById('level').textContent = this.level;
         document.getElementById('difficulty').textContent = this.difficulty.toFixed(1) + 'x';
         document.getElementById('high-score').textContent = this.highScore;
 

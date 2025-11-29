@@ -75,7 +75,7 @@ body {
     margin-bottom: 20px;
 }
 
-#score-display, #lives-display, #difficulty-display {
+#score-display, #lives-display, #level-display, #difficulty-display {
     background: rgba(0, 0, 0, 0.7);
     border: 2px solid #0ff;
     padding: 10px 20px;
@@ -83,7 +83,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    min-width: 150px;
+    min-width: 120px;
 }
 
 #score-display {
@@ -96,13 +96,18 @@ body {
     box-shadow: 0 0 10px #ff0;
 }
 
+#level-display {
+    border-color: #0f0;
+    box-shadow: 0 0 10px #0f0;
+}
+
 .label {
     font-size: 12px;
     color: #aaa;
     margin-bottom: 5px;
 }
 
-#score, #lives, #difficulty {
+#score, #lives, #level, #difficulty {
     font-size: 24px;
     font-weight: 700;
     text-shadow: 0 0 10px currentColor;
@@ -114,6 +119,10 @@ body {
 
 #lives {
     color: #ff0;
+}
+
+#level {
+    color: #0f0;
 }
 
 #difficulty {
