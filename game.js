@@ -851,6 +851,122 @@ class FloatingText {
 }
 
 // ============================================================================
+// BLACK HOLE EFFECT (for shape swapping)
+// ============================================================================
+
+class BlackHole {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 0;
+        this.maxRadius = 80;
+        this.age = 0;
+        this.lifetime = 1000; // 1 second
+        this.gravityStrength = 0.3; // How strong the pull is
+        this.active = true;
+    }
+
+    update(deltaTime) {
+        this.age += deltaTime;
+
+        // Grow radius for first half, then shrink
+        const progress = this.age / this.lifetime;
+        if (progress < 0.3) {
+            // Grow quickly
+            this.radius = (progress / 0.3) * this.maxRadius;
+        } else if (progress > 0.7) {
+            // Shrink quickly at the end
+            this.radius = ((1 - progress) / 0.3) * this.maxRadius;
+        } else {
+            // Stay at max size in the middle
+            this.radius = this.maxRadius;
+        }
+
+        if (this.age >= this.lifetime) {
+            this.active = false;
+        }
+    }
+
+    applyGravity(ball) {
+        // Calculate direction to black hole center
+        const dx = this.x - ball.x;
+        const dy = this.y - ball.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > 0) {
+            // Normalize direction
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            // Apply gravity force (stronger when closer)
+            const force = this.gravityStrength * (1 + (this.maxRadius - dist) / this.maxRadius);
+            ball.vx += nx * force;
+            ball.vy += ny * force;
+        }
+    }
+
+    draw(ctx) {
+        ctx.save();
+
+        // Draw event horizon (dark core)
+        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+        gradient.addColorStop(0.3, 'rgba(50, 0, 50, 0.9)');
+        gradient.addColorStop(0.6, 'rgba(100, 0, 100, 0.6)');
+        gradient.addColorStop(1, 'rgba(255, 0, 255, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw accretion disk (rotating ring)
+        const diskRadius = this.radius * 0.7;
+        ctx.strokeStyle = COLORS.magenta;
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.8;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = COLORS.magenta;
+
+        for (let i = 0; i < 3; i++) {
+            const r = diskRadius + i * 10;
+            ctx.globalAlpha = 0.6 - i * 0.2;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // Draw distortion effect (rays)
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = COLORS.cyan;
+        ctx.lineWidth = 2;
+        const rayCount = 12;
+        for (let i = 0; i < rayCount; i++) {
+            const angle = (Math.PI * 2 * i) / rayCount + (this.age * 0.002);
+            const innerR = this.radius * 0.5;
+            const outerR = this.radius * 1.3;
+
+            ctx.beginPath();
+            ctx.moveTo(
+                this.x + Math.cos(angle) * innerR,
+                this.y + Math.sin(angle) * innerR
+            );
+            ctx.lineTo(
+                this.x + Math.cos(angle) * outerR,
+                this.y + Math.sin(angle) * outerR
+            );
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    isActive() {
+        return this.active;
+    }
+}
+
+// ============================================================================
 // HYPERCUBE BOSS CLASS (for Track 3)
 // ============================================================================
 
@@ -1466,6 +1582,7 @@ class Game {
         this.difficultyLevel = 'normal'; // easy, normal, hard
         this.level = 1;
         this.currentBallSpeed = BASE_BALL_SPEED;
+        this.lives = 3; // Player starts with 3 lives
 
         this.balls = [];
         this.currentShape = null;
@@ -1478,6 +1595,7 @@ class Game {
         this.floatingTexts = [];
         this.particles = [];
         this.laserBeams = []; // For Track 2 lasers
+        this.blackHole = null; // Black hole effect during shape swap
 
         // Initialize sound system
         this.soundSystem = new SoundSystem();
@@ -1579,6 +1697,7 @@ class Game {
         this.state = 'playing';
         this.score = 0;
         this.level = 1;
+        this.lives = 3; // Reset lives to 3
         this.currentBallSpeed = BASE_BALL_SPEED;
         this.balls = [];
         this.blocks = [];
@@ -1704,10 +1823,18 @@ class Game {
         // Check if shape is ready
         if (now < nextShape.spawnTime) return;
 
-        // Create new shape at current position (centered) with zoom animation
-        const ShapeClass = nextShape.class;
+        // Create black hole effect at center
         const centerX = CANVAS_WIDTH / 2;
         const centerY = CANVAS_HEIGHT / 2;
+        this.blackHole = new BlackHole(centerX, centerY);
+
+        // Fade out current shape if it exists
+        if (this.currentShape) {
+            this.currentShape.targetAlpha = 0;
+        }
+
+        // Create new shape at current position (centered) with zoom animation
+        const ShapeClass = nextShape.class;
         this.currentShape = new ShapeClass(centerX, centerY, SHAPE_SIZE);
         this.currentShape.targetRotation = 0;
         this.currentShape.rotationVelocity = 0;
@@ -1788,6 +1915,14 @@ class Game {
             }
         }
 
+        // Update black hole effect
+        if (this.blackHole) {
+            this.blackHole.update(deltaTime);
+            if (!this.blackHole.isActive()) {
+                this.blackHole = null;
+            }
+        }
+
         // Get speed multiplier
         const stormActive = this.activePowerups.has('storm');
         const speedMultiplier = stormActive ? 2 : 1;
@@ -1798,6 +1933,11 @@ class Game {
         // Update balls (paused during shape swap)
         for (let i = this.balls.length - 1; i >= 0; i--) {
             const ball = this.balls[i];
+
+            // Apply black hole gravity
+            if (this.blackHole && this.blackHole.isActive()) {
+                this.blackHole.applyGravity(ball);
+            }
 
             // Skip ball physics updates during shape swap
             if (!shapeSwapping) {
@@ -2232,16 +2372,23 @@ class Game {
 
         // Check game over
         if (this.balls.length === 0) {
-            const extraLifeActive = this.activePowerups.has('extra_life');
-            if (extraLifeActive) {
-                // Respawn ball
+            if (this.lives > 0) {
+                // Lose a life and respawn ball
+                this.lives--;
                 this.balls.push(new Ball(
                     this.currentShape.x,
                     this.currentShape.y,
                     randomRange(-BASE_BALL_SPEED, BASE_BALL_SPEED),
                     randomRange(-BASE_BALL_SPEED, BASE_BALL_SPEED)
                 ));
-                this.activePowerups.delete('extra_life');
+
+                // Show life lost message
+                this.floatingTexts.push(new FloatingText(
+                    CANVAS_WIDTH / 2,
+                    CANVAS_HEIGHT / 2 - 50,
+                    `${this.lives} ${this.lives === 1 ? 'LIFE' : 'LIVES'} LEFT`,
+                    COLORS.yellow
+                ));
             } else {
                 this.endGame(false);
             }
@@ -2281,6 +2428,17 @@ class Game {
                 break;
 
             case 'extra_life':
+                // Add +1 life
+                this.lives++;
+                this.floatingTexts.push(new FloatingText(
+                    this.currentShape.x,
+                    this.currentShape.y - 80,
+                    '+1 LIFE',
+                    COLORS.yellow
+                ));
+                this.soundSystem.powerUp();
+                break;
+
             case 'shield':
             case 'power':
             case 'regen':
@@ -2509,6 +2667,11 @@ class Game {
             this.boss.draw(this.ctx);
         }
 
+        // Draw black hole effect
+        if (this.blackHole && this.blackHole.isActive()) {
+            this.blackHole.draw(this.ctx);
+        }
+
         // Draw floating texts (points)
         this.floatingTexts.forEach(text => text.draw(this.ctx));
 
@@ -2518,7 +2681,7 @@ class Game {
 
     updateUI() {
         document.getElementById('score').textContent = Math.floor(this.score);
-        document.getElementById('lives').textContent = this.balls.length;
+        document.getElementById('lives').textContent = this.lives;
         document.getElementById('level').textContent = this.level;
         document.getElementById('difficulty').textContent = this.difficulty.toFixed(1) + 'x';
         document.getElementById('high-score').textContent = this.highScore;
