@@ -862,7 +862,6 @@ class BlackHole {
         this.maxRadius = 80;
         this.age = 0;
         this.lifetime = 1000; // 1 second
-        this.gravityStrength = 0.3; // How strong the pull is
         this.active = true;
     }
 
@@ -893,15 +892,30 @@ class BlackHole {
         const dy = this.y - ball.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist > 0) {
+        if (dist > 1) { // Avoid division by zero
             // Normalize direction
             const nx = dx / dist;
             const ny = dy / dist;
 
-            // Apply gravity force (stronger when closer)
-            const force = this.gravityStrength * (1 + (this.maxRadius - dist) / this.maxRadius);
-            ball.vx += nx * force;
-            ball.vy += ny * force;
+            // Gentle gravity that gets stronger as balls get closer
+            // Use inverse distance for natural gravity feel
+            const maxPullDistance = 300; // Maximum distance at which gravity has effect
+            if (dist < maxPullDistance) {
+                // Gentle pull that increases as balls get closer
+                const pullStrength = 0.08; // Very gentle base strength
+                const distanceFactor = 1 - (dist / maxPullDistance); // 0 to 1, higher when closer
+                const force = pullStrength * distanceFactor;
+
+                ball.vx += nx * force;
+                ball.vy += ny * force;
+            }
+
+            // Apply slight damping to slow balls down as they approach center
+            if (dist < this.maxRadius * 2) {
+                const dampingFactor = 0.98;
+                ball.vx *= dampingFactor;
+                ball.vy *= dampingFactor;
+            }
         }
     }
 
