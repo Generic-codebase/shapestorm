@@ -7,7 +7,7 @@ const CANVAS_WIDTH = 900;
 const CANVAS_HEIGHT = 700;
 const BASE_BALL_SPEED = 1.5; // Even slower baseline
 const BALL_SPEED_INCREMENT = 0.15; // Speed increase per level
-const MAX_BALLS = 64; // Maximum balls allowed
+const MAX_BALLS = 8; // Maximum balls allowed
 const SHAPE_SPAWN_TIME = 15000; // 15 seconds
 const POWERUP_DURATION = 15000; // 15 seconds
 const BOSS_HP = 50;
@@ -1007,10 +1007,17 @@ class Game {
         const stormActive = this.activePowerups.has('storm');
         const speedMultiplier = stormActive ? 2 : 1;
 
-        // Update balls
+        // Check if shape is swapping (pause balls during shape rotation)
+        const shapeSwapping = this.currentShape && this.currentShape.scale < 1.0;
+
+        // Update balls (paused during shape swap)
         for (let i = this.balls.length - 1; i >= 0; i--) {
             const ball = this.balls[i];
-            ball.update(speedMultiplier);
+
+            // Skip ball physics updates during shape swap
+            if (!shapeSwapping) {
+                ball.update(speedMultiplier);
+            }
 
             // Check if supercharge has expired
             if (ball.supercharged && now > ball.superchargedEndTime) {
@@ -1018,11 +1025,14 @@ class Game {
                 ball.superchargedEndTime = 0;
             }
 
-            // Check if ball is out of bounds
-            if (ball.x < 0 || ball.x > CANVAS_WIDTH || ball.y < 0 || ball.y > CANVAS_HEIGHT) {
+            // Check if ball is out of bounds (only when not paused)
+            if (!shapeSwapping && (ball.x < 0 || ball.x > CANVAS_WIDTH || ball.y < 0 || ball.y > CANVAS_HEIGHT)) {
                 this.balls.splice(i, 1);
                 continue;
             }
+
+            // Skip collision detection during shape swap
+            if (shapeSwapping) continue;
 
             // Check collision with current shape
             if (this.currentShape) {
