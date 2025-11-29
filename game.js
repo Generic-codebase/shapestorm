@@ -1193,6 +1193,7 @@ class Game {
         this.lastBeat = 0;
         this.laserSpawnTimer = 0;
         this.laserSpawnInterval = 8000; // Spawn laser every 8 seconds during Track 2
+        this.fadeInterval = null; // Track fade-out interval
 
         this.setupEventListeners();
         this.updateUI();
@@ -1318,10 +1319,17 @@ class Game {
     }
 
     playTrack(trackNumber) {
-        // Stop all tracks
+        // Clear any active fade interval
+        if (this.fadeInterval) {
+            clearInterval(this.fadeInterval);
+            this.fadeInterval = null;
+        }
+
+        // Stop all tracks and reset volumes
         Object.values(this.tracks).forEach(track => {
             track.pause();
             track.currentTime = 0;
+            track.volume = 1.0; // Reset volume
         });
 
         // Play specified track
@@ -2045,11 +2053,18 @@ class Game {
         const currentTrack = this.tracks[this.currentTrack];
         if (!currentTrack) return;
 
-        const fadeAudio = setInterval(() => {
+        // Clear any existing fade interval
+        if (this.fadeInterval) {
+            clearInterval(this.fadeInterval);
+        }
+
+        // Start new fade interval
+        this.fadeInterval = setInterval(() => {
             if (currentTrack.volume > 0.1) {
                 currentTrack.volume -= 0.1;
             } else {
-                clearInterval(fadeAudio);
+                clearInterval(this.fadeInterval);
+                this.fadeInterval = null;
                 currentTrack.pause();
                 currentTrack.volume = 1.0; // Reset for next play
             }
@@ -2074,11 +2089,20 @@ class Game {
 
     showMenu() {
         this.state = 'menu';
-        // Stop all tracks
+
+        // Clear any active fade interval
+        if (this.fadeInterval) {
+            clearInterval(this.fadeInterval);
+            this.fadeInterval = null;
+        }
+
+        // Stop all tracks and reset volumes
         Object.values(this.tracks).forEach(track => {
             track.pause();
             track.currentTime = 0;
+            track.volume = 1.0; // Reset volume
         });
+
         document.getElementById('menu-overlay').classList.add('active');
         document.getElementById('pause-overlay').classList.remove('active');
         document.getElementById('gameover-overlay').classList.remove('active');
