@@ -121,40 +121,50 @@ class Ball {
         this.color = COLORS.cyan;
         this.trail = [];
         this.maxTrail = 10;
+        this.wallContactTime = 0;
+        this.lastContactPoint = null;
+        this.supercharged = false;
+        this.superchargedEndTime = 0;
     }
 
     update(speedMultiplier = 1) {
+        // Extended trail for supercharged balls
+        const maxTrail = this.supercharged ? 20 : 10;
         this.trail.push({ x: this.x, y: this.y });
-        if (this.trail.length > this.maxTrail) {
+        if (this.trail.length > maxTrail) {
             this.trail.shift();
         }
 
-        this.x += this.vx * speedMultiplier;
-        this.y += this.vy * speedMultiplier;
+        // Apply supercharge speed boost
+        const superchargeMultiplier = this.supercharged ? 2 : 1;
+        this.x += this.vx * speedMultiplier * superchargeMultiplier;
+        this.y += this.vy * speedMultiplier * superchargeMultiplier;
     }
 
     draw(ctx) {
-        // Draw trail
+        const displayColor = this.supercharged ? COLORS.yellow : this.color;
+
+        // Draw trail (afterimage effect when supercharged)
         for (let i = 0; i < this.trail.length; i++) {
             const alpha = i / this.trail.length;
             ctx.beginPath();
             ctx.arc(this.trail[i].x, this.trail[i].y, this.radius * alpha, 0, Math.PI * 2);
-            ctx.fillStyle = this.color + Math.floor(alpha * 100).toString(16).padStart(2, '0');
+            ctx.fillStyle = displayColor + Math.floor(alpha * 100).toString(16).padStart(2, '0');
             ctx.fill();
         }
 
         // Draw ball
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = displayColor;
         ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = this.supercharged ? COLORS.orange : '#fff';
+        ctx.lineWidth = this.supercharged ? 3 : 2;
         ctx.stroke();
 
-        // Glow effect
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = this.color;
+        // Enhanced glow for supercharged
+        ctx.shadowBlur = this.supercharged ? 30 : 20;
+        ctx.shadowColor = displayColor;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
@@ -1002,6 +1012,12 @@ class Game {
             const ball = this.balls[i];
             ball.update(speedMultiplier);
 
+            // Check if supercharge has expired
+            if (ball.supercharged && now > ball.superchargedEndTime) {
+                ball.supercharged = false;
+                ball.superchargedEndTime = 0;
+            }
+
             // Check if ball is out of bounds
             if (ball.x < 0 || ball.x > CANVAS_WIDTH || ball.y < 0 || ball.y > CANVAS_HEIGHT) {
                 this.balls.splice(i, 1);
@@ -1016,9 +1032,50 @@ class Game {
                     const shieldActive = this.activePowerups.has('shield');
                     const regenActive = this.activePowerups.has('regen');
 
+                    // Track wall contact for stuck ball detection
+                    if (ball.lastContactPoint &&
+                        distance(ball.x, ball.y, ball.lastContactPoint.x, ball.lastContactPoint.y) < 2) {
+                        ball.wallContactTime += deltaTime;
+                    } else {
+                        ball.wallContactTime = 0;
+                        ball.lastContactPoint = { x: ball.x, y: ball.y };
+                    }
+
+                    // Supercharge if stuck for too long
+                    if (ball.wallContactTime > 500 && !ball.supercharged) {
+                        this.superchargeBall(ball);
+                    }
+
                     if (this.currentShape.walls[wallIndex] || shieldActive) {
-                        // Reflect ball
+                        // Reflect ball with improved physics
                         this.currentShape.reflectBall(ball, wallIndex);
+
+                        // Add curveball effect from rotation
+                        const rotationInfluence = this.currentShape.rotationVelocity * 15;
+                        ball.vx += rotationInfluence * Math.sin(this.currentShape.rotation);
+                        ball.vy -= rotationInfluence * Math.cos(this.currentShape.rotation);
+
+                        // Normalize speed to prevent acceleration
+                        const speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
+                        const targetSpeed = this.currentBallSpeed * this.difficulty;
+                        ball.vx = (ball.vx / speed) * targetSpeed;
+                        ball.vy = (ball.vy / speed) * targetSpeed;
+
+                        // Push ball away from wall to prevent sticking
+                        const vertices = this.currentShape.getVertices();
+                        const v1 = vertices[wallIndex];
+                        const v2 = vertices[(wallIndex + 1) % vertices.length];
+                        const dx = v2.x - v1.x;
+                        const dy = v2.y - v1.y;
+                        const nx = -dy;
+                        const ny = dx;
+                        const len = Math.sqrt(nx * nx + ny * ny);
+                        const normalX = nx / len;
+                        const normalY = ny / len;
+
+                        // Ensure ball moves away from wall
+                        ball.x += normalX * 3;
+                        ball.y += normalY * 3;
 
                         // Play wall bounce sound
                         this.soundSystem.wallBounce();
@@ -1032,7 +1089,15 @@ class Game {
                         if (!shieldActive && !regenActive) {
                             this.currentShape.breakWall(wallIndex);
                         }
+
+                        // Reset contact tracking after successful bounce
+                        ball.wallContactTime = 0;
+                        ball.lastContactPoint = null;
                     }
+                } else {
+                    // Reset contact tracking when not colliding
+                    ball.wallContactTime = 0;
+                    ball.lastContactPoint = null;
                 }
             }
 
@@ -1297,6 +1362,43 @@ class Game {
         }
 
         this.updatePowerupsDisplay();
+    }
+
+    superchargeBall(ball) {
+        const now = Date.now();
+
+        // Set supercharged state
+        ball.supercharged = true;
+        ball.superchargedEndTime = now + 1000; // 1 second duration
+
+        // Calculate direction toward shape center
+        const dx = this.currentShape.x - ball.x;
+        const dy = this.currentShape.y - ball.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Normalize and apply velocity toward center
+        const speed = this.currentBallSpeed * this.difficulty * 2; // 2x speed
+        ball.vx = (dx / dist) * speed;
+        ball.vy = (dy / dist) * speed;
+
+        // Add slight randomness to prevent perfectly straight bounces
+        ball.vx += randomRange(-0.3, 0.3);
+        ball.vy += randomRange(-0.3, 0.3);
+
+        // Display "SUPERCHARGED" floating text next to ball
+        this.floatingTexts.push(new FloatingText(ball.x + 30, ball.y, 'SUPERCHARGED', COLORS.yellow));
+
+        // Create burst particles around the ball
+        for (let i = 0; i < 20; i++) {
+            this.particles.push(new Particle(ball.x, ball.y, COLORS.yellow));
+        }
+
+        // Reset wall contact tracking
+        ball.wallContactTime = 0;
+        ball.lastContactPoint = null;
+
+        // Play a special sound
+        this.soundSystem.powerUp();
     }
 
     levelUp() {
