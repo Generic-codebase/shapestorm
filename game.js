@@ -537,7 +537,7 @@ class PowerUp {
         this.vy = 2;
 
         const types = {
-            'multiply': { color: COLORS.cyan, symbol: '×2' },
+            'multiply': { color: COLORS.cyan, symbol: '+⚪' },
             'extra_life': { color: COLORS.yellow, symbol: '+1' },
             'shield': { color: COLORS.green, symbol: '🛡' },
             'power': { color: COLORS.red, symbol: '⚡' },
@@ -1922,14 +1922,12 @@ class Game {
 
         switch (type) {
             case 'multiply':
-                const newBalls = [];
-                this.balls.forEach(ball => {
-                    // Only add if under max limit
-                    if (this.balls.length + newBalls.length < MAX_BALLS) {
-                        newBalls.push(ball.clone());
-                    }
-                });
-                this.balls.push(...newBalls);
+                // Add 1 ball if under max limit (8 balls)
+                if (this.balls.length < MAX_BALLS && this.balls.length > 0) {
+                    // Clone a random existing ball
+                    const randomBall = this.balls[Math.floor(Math.random() * this.balls.length)];
+                    this.balls.push(randomBall.clone());
+                }
                 break;
 
             case 'extra_life':
