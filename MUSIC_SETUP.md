@@ -1,20 +1,26 @@
-# Shape Storm - Background Music Setup Guide
+# Shape Storm - Multi-Track Music System Guide
 
 ## Current Music Configuration
 
-The game is already configured to play background music automatically! Here's what's set up:
+The game features a **3-track progressive music system** with BPM synchronization and unique gameplay mechanics for each track!
 
-### Audio Element (index.html:106)
+### Audio Elements (index.html:104-112)
 ```html
-<audio id="game-music" src="https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3" loop></audio>
+<!-- Track 1: 122 BPM - Opening gameplay -->
+<audio id="track-1" src="https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3"></audio>
+
+<!-- Track 2: 120 BPM - Mid-game with laser beams -->
+<audio id="track-2" src="https://assets.mixkit.co/music/preview/mixkit-in-slow-motion-funk-1118.mp3"></audio>
+
+<!-- Track 3: 220 BPM - Boss fight -->
+<audio id="track-3" src="https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3"></audio>
 ```
 
-### Game Integration (game.js:906-912)
-The music automatically starts when you click "START GAME":
-- Music starts from the beginning (currentTime = 0)
-- Loops continuously during gameplay
-- Fades out on game over
-- Pauses when you pause the game
+### Track Progression System
+The game automatically transitions between tracks:
+1. **Track 1 (122 BPM)**: Plays at game start
+2. **Track 2 (120 BPM)**: Plays when Track 1 ends
+3. **Track 3 (220 BPM)**: Plays when Track 2 ends (triggers boss fight)
 
 ## How to Test the Music
 
@@ -85,16 +91,45 @@ Update the src attribute to any publicly accessible music file:
    - https://www.bensound.com/
    - Free with attribution
 
+## BPM Configuration and Gameplay Mechanics
+
+### Track 1: 122 BPM - Opening Phase
+- **Standard gameplay**: Break blocks, collect powerups, avoid losing balls
+- **Duration**: Until track completes (varies by music file)
+- **Mechanics**: Normal ball physics and shape rotation
+
+### Track 2: 120 BPM - Laser Chaos
+- **WARNING**: "LASER WARNING" message displays when Track 2 begins
+- **New Mechanic**: Edge laser beams fire from screen borders
+  - Lasers charge for 1 second (dashed line indicator)
+  - Lasers fire for 0.5 seconds (solid red beam)
+  - Lasers destroy walls AND blocks on contact
+  - **Shield powerup** is the only protection
+  - Spawns every 8 seconds from random edge (top/bottom/left/right)
+- **Strategic Tip**: Prioritize shield powerups during this phase!
+
+### Track 3: 220 BPM - Hypercube Boss Fight
+- **Boss**: Hypercube appears at screen center
+- **Boss Behavior**:
+  - Constantly morphs between 4 shapes (cube, octahedron, diamond, star)
+  - Color cycles through spectrum (red → magenta → purple → cyan → yellow)
+  - Fires 4-directional lasers every 1.5 seconds
+  - 50 HP total
+- **Boss Lasers**: Destroy balls on contact (shield protects)
+- **Victory**: Defeat Hypercube to win the game
+- **Faster BPM**: 220 BPM creates intense, high-speed gameplay
+
 ## Music Behavior
 
 | Event | Music Behavior |
 |-------|---------------|
-| Game Start | Plays from beginning, loops |
-| Pause | Pauses music |
-| Resume | Resumes from pause point |
-| Game Over | Fades out over 1 second |
-| Return to Menu | Stops and resets to beginning |
-| Boss Fight | Continues playing (boss spawns after ~2 minutes) |
+| Game Start | Plays Track 1 (122 BPM) |
+| Track 1 Ends | Auto-transitions to Track 2 (120 BPM) |
+| Track 2 Ends | Auto-transitions to Track 3 (220 BPM) + spawns Hypercube boss |
+| Pause | Pauses current track |
+| Resume | Resumes current track from pause point |
+| Game Over | Fades out current track over 1 second |
+| Return to Menu | Stops all tracks and resets to beginning |
 
 ## Troubleshooting
 

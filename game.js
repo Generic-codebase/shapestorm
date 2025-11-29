@@ -13,6 +13,13 @@ const POWERUP_DURATION = 15000; // 15 seconds
 const BOSS_HP = 50;
 const SHAPE_SIZE = 320; // Larger shape (was 280)
 
+// Music Track Configuration
+const TRACK_CONFIG = {
+    1: { bpm: 122, laserBeams: false },
+    2: { bpm: 120, laserBeams: true },
+    3: { bpm: 220, laserBeams: false, boss: true }
+};
+
 // Color Palette
 const COLORS = {
     cyan: '#0ff',
@@ -625,6 +632,164 @@ class Particle {
 }
 
 // ============================================================================
+// LASER BEAM CLASS (for Track 2)
+// ============================================================================
+
+class LaserBeam {
+    constructor(side) {
+        this.side = side; // 'top', 'right', 'bottom', 'left'
+        this.chargeTime = 1000; // 1 second charge
+        this.fireTime = 500; // 0.5 second fire
+        this.age = 0;
+        this.state = 'charging'; // 'charging', 'firing', 'done'
+        this.width = 3; // Narrow beam
+        this.color = COLORS.red;
+
+        // Calculate beam position and direction
+        switch(side) {
+            case 'top':
+                this.x1 = Math.random() * CANVAS_WIDTH;
+                this.y1 = 0;
+                this.x2 = this.x1;
+                this.y2 = CANVAS_HEIGHT;
+                break;
+            case 'bottom':
+                this.x1 = Math.random() * CANVAS_WIDTH;
+                this.y1 = CANVAS_HEIGHT;
+                this.x2 = this.x1;
+                this.y2 = 0;
+                break;
+            case 'left':
+                this.x1 = 0;
+                this.y1 = Math.random() * CANVAS_HEIGHT;
+                this.x2 = CANVAS_WIDTH;
+                this.y2 = this.y1;
+                break;
+            case 'right':
+                this.x1 = CANVAS_WIDTH;
+                this.y1 = Math.random() * CANVAS_HEIGHT;
+                this.x2 = 0;
+                this.y2 = this.y1;
+                break;
+        }
+    }
+
+    update(deltaTime) {
+        this.age += deltaTime;
+
+        if (this.state === 'charging' && this.age >= this.chargeTime) {
+            this.state = 'firing';
+            this.age = 0;
+        } else if (this.state === 'firing' && this.age >= this.fireTime) {
+            this.state = 'done';
+        }
+    }
+
+    draw(ctx) {
+        if (this.state === 'charging') {
+            // Draw charging indicator
+            const alpha = (this.age / this.chargeTime) * 0.7;
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = this.width;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(this.x1, this.y1);
+            ctx.lineTo(this.x2, this.y2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+
+            // Draw charging glow at origin
+            ctx.save();
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = this.color;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x1, this.y1, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else if (this.state === 'firing') {
+            // Draw firing beam
+            ctx.save();
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = this.width;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = this.color;
+            ctx.beginPath();
+            ctx.moveTo(this.x1, this.y1);
+            ctx.lineTo(this.x2, this.y2);
+            ctx.stroke();
+
+            // Draw intense glow
+            ctx.lineWidth = this.width * 2;
+            ctx.globalAlpha = 0.5;
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    isDone() {
+        return this.state === 'done';
+    }
+
+    isFiring() {
+        return this.state === 'firing';
+    }
+
+    // Check if point intersects beam (for collision detection)
+    intersectsPoint(x, y, radius = 0) {
+        if (!this.isFiring()) return false;
+
+        // Point-to-line distance
+        const A = x - this.x1;
+        const B = y - this.y1;
+        const C = this.x2 - this.x1;
+        const D = this.y2 - this.y1;
+
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        let param = -1;
+
+        if (lenSq !== 0) param = dot / lenSq;
+
+        let xx, yy;
+
+        if (param < 0) {
+            xx = this.x1;
+            yy = this.y1;
+        } else if (param > 1) {
+            xx = this.x2;
+            yy = this.y2;
+        } else {
+            xx = this.x1 + param * C;
+            yy = this.y1 + param * D;
+        }
+
+        const dx = x - xx;
+        const dy = y - yy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        return dist < (this.width + radius);
+    }
+
+    // Check if beam intersects a line segment (for walls)
+    intersectsLine(x1, y1, x2, y2) {
+        if (!this.isFiring()) return false;
+
+        // Line-line intersection
+        const denom = ((this.y2 - this.y1) * (x2 - x1)) - ((this.x2 - this.x1) * (y2 - y1));
+        if (denom === 0) return false;
+
+        const ua = (((this.x2 - this.x1) * (y1 - this.y1)) - ((this.y2 - this.y1) * (x1 - this.x1))) / denom;
+        const ub = (((x2 - x1) * (y1 - this.y1)) - ((y2 - y1) * (x1 - this.x1))) / denom;
+
+        return (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1);
+    }
+}
+
+// ============================================================================
 // FLOATING TEXT CLASS (for score display)
 // ============================================================================
 
@@ -671,71 +836,140 @@ class FloatingText {
 }
 
 // ============================================================================
-// BOSS CLASS
+// HYPERCUBE BOSS CLASS (for Track 3)
 // ============================================================================
 
-class Boss {
+class Hypercube {
     constructor() {
         this.x = CANVAS_WIDTH / 2;
-        this.y = 100;
-        this.width = 150;
-        this.height = 150;
+        this.y = CANVAS_HEIGHT / 2;
+        this.size = 80;
         this.hp = BOSS_HP;
         this.maxHp = BOSS_HP;
-        this.phase = 1;
-        this.color = COLORS.red;
         this.defeated = false;
-        this.attackTimer = 0;
-        this.attackInterval = 2000;
+        this.rotation = 0;
+        this.rotationSpeed = 0.02;
+
+        // Shape morphing
+        this.currentShape = 'cube';
+        this.shapeTimer = 0;
+        this.shapeInterval = 2000; // Change shape every 2 seconds
+        this.shapes = ['cube', 'octahedron', 'diamond', 'star'];
+
+        // Laser attacks
+        this.laserTimer = 0;
+        this.laserInterval = 1500; // Fire laser every 1.5 seconds
+        this.lasers = [];
+
+        // Colors cycle through spectrum
+        this.colorPhase = 0;
+        this.colors = [COLORS.red, COLORS.magenta, COLORS.purple, COLORS.cyan, COLORS.yellow];
+    }
+
+    update(deltaTime) {
+        this.rotation += this.rotationSpeed;
+        this.shapeTimer += deltaTime;
+        this.laserTimer += deltaTime;
+        this.colorPhase = (this.colorPhase + 0.01) % this.colors.length;
+
+        // Morph to next shape
+        if (this.shapeTimer >= this.shapeInterval) {
+            this.shapeTimer = 0;
+            const currentIndex = this.shapes.indexOf(this.currentShape);
+            this.currentShape = this.shapes[(currentIndex + 1) % this.shapes.length];
+        }
+
+        // Fire laser
+        if (this.laserTimer >= this.laserInterval) {
+            this.laserTimer = 0;
+            this.fireLaser();
+        }
+
+        // Update boss lasers
+        for (let i = this.lasers.length - 1; i >= 0; i--) {
+            this.lasers[i].update(deltaTime);
+            if (this.lasers[i].isDone()) {
+                this.lasers.splice(i, 1);
+            }
+        }
+    }
+
+    fireLaser() {
+        // Fire 4 lasers in cardinal directions
+        const directions = [
+            { x: 1, y: 0 },   // right
+            { x: -1, y: 0 },  // left
+            { x: 0, y: 1 },   // down
+            { x: 0, y: -1 }   // up
+        ];
+
+        directions.forEach(dir => {
+            this.lasers.push({
+                x1: this.x,
+                y1: this.y,
+                x2: this.x + dir.x * 1000,
+                y2: this.y + dir.y * 1000,
+                age: 0,
+                lifetime: 500,
+                width: 4
+            });
+        });
     }
 
     draw(ctx) {
-        // Boss body
+        // Get current color
+        const colorIndex = Math.floor(this.colorPhase);
+        const color = this.colors[colorIndex];
+
+        // Draw hypercube based on current shape
         ctx.save();
         ctx.translate(this.x, this.y);
-        ctx.rotate(Date.now() / 1000);
+        ctx.rotate(this.rotation);
 
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI * 2 * i) / 6;
-            const x = Math.cos(angle) * 50;
-            const y = Math.sin(angle) * 50;
-
-            ctx.beginPath();
-            ctx.arc(x, y, 20, 0, Math.PI * 2);
-            ctx.fillStyle = this.color + '66';
-            ctx.fill();
-            ctx.strokeStyle = this.color;
-            ctx.lineWidth = 3;
-            ctx.stroke();
+        switch(this.currentShape) {
+            case 'cube':
+                this.drawCube(ctx, color);
+                break;
+            case 'octahedron':
+                this.drawOctahedron(ctx, color);
+                break;
+            case 'diamond':
+                this.drawDiamond(ctx, color);
+                break;
+            case 'star':
+                this.drawStar(ctx, color);
+                break;
         }
 
         ctx.restore();
 
-        // Boss core
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 40, 0, Math.PI * 2);
-        ctx.fillStyle = this.color + '88';
-        ctx.fill();
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        ctx.shadowBlur = 30;
-        ctx.shadowColor = this.color;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+        // Draw boss lasers
+        this.lasers.forEach(laser => {
+            const alpha = 1 - (laser.age / laser.lifetime);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = laser.width;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = color;
+            ctx.beginPath();
+            ctx.moveTo(laser.x1, laser.y1);
+            ctx.lineTo(laser.x2, laser.y2);
+            ctx.stroke();
+            ctx.restore();
+        });
 
         // HP Bar
         const barWidth = 200;
         const barHeight = 20;
         const barX = this.x - barWidth / 2;
-        const barY = this.y - 100;
+        const barY = this.y - 120;
 
         ctx.fillStyle = '#333';
         ctx.fillRect(barX, barY, barWidth, barHeight);
 
         const hpWidth = (this.hp / this.maxHp) * barWidth;
-        ctx.fillStyle = this.color;
+        ctx.fillStyle = color;
         ctx.fillRect(barX, barY, hpWidth, barHeight);
 
         ctx.strokeStyle = '#fff';
@@ -745,15 +979,158 @@ class Boss {
         ctx.fillStyle = '#fff';
         ctx.font = '12px Orbitron';
         ctx.textAlign = 'center';
-        ctx.fillText(`BOSS: ${this.hp}/${this.maxHp}`, this.x, barY - 10);
+        ctx.fillText(`HYPERCUBE: ${this.hp}/${this.maxHp}`, this.x, barY - 10);
     }
 
-    update(deltaTime) {
-        this.attackTimer += deltaTime;
+    drawCube(ctx, color) {
+        // Draw 3D cube wireframe
+        const s = this.size;
+
+        // Front face
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = color;
+        ctx.strokeRect(-s/2, -s/2, s, s);
+
+        // Back face (smaller for perspective)
+        ctx.strokeRect(-s/3, -s/3, s * 0.66, s * 0.66);
+
+        // Connect corners
+        ctx.beginPath();
+        ctx.moveTo(-s/2, -s/2);
+        ctx.lineTo(-s/3, -s/3);
+        ctx.moveTo(s/2, -s/2);
+        ctx.lineTo(s/3, -s/3);
+        ctx.moveTo(-s/2, s/2);
+        ctx.lineTo(-s/3, s/3);
+        ctx.moveTo(s/2, s/2);
+        ctx.lineTo(s/3, s/3);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    drawOctahedron(ctx, color) {
+        const s = this.size;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = color;
+
+        ctx.beginPath();
+        ctx.moveTo(0, -s);
+        ctx.lineTo(-s, 0);
+        ctx.lineTo(0, s);
+        ctx.lineTo(s, 0);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Cross lines
+        ctx.beginPath();
+        ctx.moveTo(0, -s);
+        ctx.lineTo(0, s);
+        ctx.moveTo(-s, 0);
+        ctx.lineTo(s, 0);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    drawDiamond(ctx, color) {
+        const s = this.size;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = color;
+
+        // Diamond shape
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 1.2);
+        ctx.lineTo(-s * 0.7, 0);
+        ctx.lineTo(0, s * 1.2);
+        ctx.lineTo(s * 0.7, 0);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Inner lines
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 1.2);
+        ctx.lineTo(0, s * 1.2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    drawStar(ctx, color) {
+        const s = this.size;
+        const points = 8;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = color;
+
+        ctx.beginPath();
+        for (let i = 0; i < points; i++) {
+            const angle = (Math.PI * 2 * i) / points;
+            const radius = i % 2 === 0 ? s : s / 2;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
     }
 
     checkCollision(ball) {
-        return distance(this.x, this.y, ball.x, ball.y) < 40 + ball.radius;
+        return distance(this.x, this.y, ball.x, ball.y) < this.size + ball.radius;
+    }
+
+    checkLaserHit(ball) {
+        for (const laser of this.lasers) {
+            if (laser.age < laser.lifetime) {
+                // Check if ball intersects laser
+                const dist = this.pointToLineDistance(
+                    ball.x, ball.y,
+                    laser.x1, laser.y1,
+                    laser.x2, laser.y2
+                );
+                if (dist < ball.radius + laser.width) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    pointToLineDistance(px, py, x1, y1, x2, y2) {
+        const A = px - x1;
+        const B = py - y1;
+        const C = x2 - x1;
+        const D = y2 - y1;
+
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        let param = -1;
+
+        if (lenSq !== 0) param = dot / lenSq;
+
+        let xx, yy;
+
+        if (param < 0) {
+            xx = x1;
+            yy = y1;
+        } else if (param > 1) {
+            xx = x2;
+            yy = y2;
+        } else {
+            xx = x1 + param * C;
+            yy = y1 + param * D;
+        }
+
+        const dx = px - xx;
+        const dy = py - yy;
+
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
     hit() {
@@ -793,6 +1170,7 @@ class Game {
         this.bossMode = false;
         this.floatingTexts = [];
         this.particles = [];
+        this.laserBeams = []; // For Track 2 lasers
 
         // Initialize sound system
         this.soundSystem = new SoundSystem();
@@ -803,11 +1181,18 @@ class Game {
         this.lastShapeSwap = 0;
         this.shapeSpawnTimers = [];
 
-        this.music = document.getElementById('game-music');
-        this.musicStartTime = 0;
-        this.musicDuration = 120000; // 2 minutes default
-        this.beatInterval = 500;
+        // Multi-track music system
+        this.tracks = {
+            1: document.getElementById('track-1'),
+            2: document.getElementById('track-2'),
+            3: document.getElementById('track-3')
+        };
+        this.currentTrack = 1;
+        this.currentBPM = TRACK_CONFIG[1].bpm;
+        this.beatInterval = (60 / this.currentBPM) * 1000; // milliseconds per beat
         this.lastBeat = 0;
+        this.laserSpawnTimer = 0;
+        this.laserSpawnInterval = 8000; // Spawn laser every 8 seconds during Track 2
 
         this.setupEventListeners();
         this.updateUI();
@@ -876,6 +1261,13 @@ class Game {
         this.shapeSpawnTimers = [];
         this.bossMode = false;
         this.boss = null;
+        this.laserBeams = [];
+        this.laserSpawnTimer = 0;
+
+        // Reset to Track 1
+        this.currentTrack = 1;
+        this.currentBPM = TRACK_CONFIG[1].bpm;
+        this.beatInterval = (60 / this.currentBPM) * 1000;
 
         // Create initial ball
         const centerX = CANVAS_WIDTH / 2;
@@ -903,13 +1295,8 @@ class Game {
         // Generate blocks
         this.generateBlocks();
 
-        // Start music
-        this.musicStartTime = Date.now();
-        if (this.music.src) {
-            this.music.currentTime = 0;
-            this.music.play().catch(e => console.log('Audio play failed:', e));
-            this.musicDuration = (this.music.duration || 120) * 1000; // Use actual duration or default to 2 min
-        }
+        // Start Track 1
+        this.playTrack(1);
 
         // Hide all overlays
         document.getElementById('menu-overlay').classList.remove('active');
@@ -928,6 +1315,49 @@ class Game {
             spawnTime: Date.now() + SHAPE_SPAWN_TIME
         };
         this.shapePool.push(shape);
+    }
+
+    playTrack(trackNumber) {
+        // Stop all tracks
+        Object.values(this.tracks).forEach(track => {
+            track.pause();
+            track.currentTime = 0;
+        });
+
+        // Play specified track
+        const track = this.tracks[trackNumber];
+        if (track && track.src) {
+            this.currentTrack = trackNumber;
+            this.currentBPM = TRACK_CONFIG[trackNumber].bpm;
+            this.beatInterval = (60 / this.currentBPM) * 1000;
+
+            track.currentTime = 0;
+            track.play().catch(e => console.log(`Track ${trackNumber} play failed:`, e));
+
+            // Set up event listener for track end
+            track.onended = () => {
+                if (this.state === 'playing') {
+                    this.onTrackEnded(trackNumber);
+                }
+            };
+        }
+    }
+
+    onTrackEnded(trackNumber) {
+        if (trackNumber === 1) {
+            // Track 1 finished, start Track 2
+            this.playTrack(2);
+            this.floatingTexts.push(new FloatingText(
+                CANVAS_WIDTH / 2,
+                CANVAS_HEIGHT / 2,
+                'LASER WARNING',
+                COLORS.red
+            ));
+        } else if (trackNumber === 2) {
+            // Track 2 finished, start boss fight with Track 3
+            this.playTrack(3);
+            this.spawnBoss();
+        }
     }
 
     swapShape() {
@@ -998,9 +1428,23 @@ class Game {
 
         const now = Date.now();
 
-        // Check if music ended and spawn boss
-        if (!this.bossMode && now - this.musicStartTime > this.musicDuration) {
-            this.spawnBoss();
+        // Spawn laser beams during Track 2
+        if (this.currentTrack === 2 && TRACK_CONFIG[2].laserBeams) {
+            this.laserSpawnTimer += deltaTime;
+            if (this.laserSpawnTimer >= this.laserSpawnInterval) {
+                this.laserSpawnTimer = 0;
+                const sides = ['top', 'bottom', 'left', 'right'];
+                const randomSide = sides[Math.floor(Math.random() * sides.length)];
+                this.laserBeams.push(new LaserBeam(randomSide));
+            }
+        }
+
+        // Update laser beams
+        for (let i = this.laserBeams.length - 1; i >= 0; i--) {
+            this.laserBeams[i].update(deltaTime);
+            if (this.laserBeams[i].isDone()) {
+                this.laserBeams.splice(i, 1);
+            }
         }
 
         // Get speed multiplier
@@ -1198,6 +1642,37 @@ class Game {
                         this.endGame(true);
                     }
                 }
+
+                // Check boss laser hits (Hypercube)
+                if (this.boss.checkLaserHit && this.boss.checkLaserHit(ball)) {
+                    // Destroy ball unless shielded
+                    const shieldActive = this.activePowerups.has('shield');
+                    if (!shieldActive) {
+                        this.balls.splice(i, 1);
+                        // Create explosion particles
+                        for (let p = 0; p < 15; p++) {
+                            this.particles.push(new Particle(ball.x, ball.y, COLORS.orange));
+                        }
+                        this.soundSystem.bossHit();
+                        continue;
+                    }
+                }
+            }
+
+            // Check collision with edge laser beams
+            for (const laser of this.laserBeams) {
+                if (laser.intersectsPoint(ball.x, ball.y, ball.radius)) {
+                    // Destroy ball unless shielded
+                    const shieldActive = this.activePowerups.has('shield');
+                    if (!shieldActive) {
+                        this.balls.splice(i, 1);
+                        // Create explosion particles
+                        for (let p = 0; p < 15; p++) {
+                            this.particles.push(new Particle(ball.x, ball.y, COLORS.red));
+                        }
+                        break;
+                    }
+                }
             }
 
             // Check collision with powerups
@@ -1220,6 +1695,77 @@ class Game {
             // Remove if out of bounds
             if (this.powerups[i].y > CANVAS_HEIGHT) {
                 this.powerups.splice(i, 1);
+            }
+        }
+
+        // Check laser beam collisions with walls and blocks
+        const shieldActive = this.activePowerups.has('shield');
+        for (const laser of this.laserBeams) {
+            if (laser.isFiring() && this.currentShape) {
+                // Check walls
+                const vertices = this.currentShape.getVertices();
+                for (let i = 0; i < vertices.length; i++) {
+                    const v1 = vertices[i];
+                    const v2 = vertices[(i + 1) % vertices.length];
+
+                    if (laser.intersectsLine(v1.x, v1.y, v2.x, v2.y)) {
+                        // Destroy wall unless shielded
+                        if (!shieldActive && this.currentShape.walls[i]) {
+                            this.currentShape.breakWall(i);
+                            // Create particles at intersection
+                            const midX = (v1.x + v2.x) / 2;
+                            const midY = (v1.y + v2.y) / 2;
+                            for (let p = 0; p < 10; p++) {
+                                this.particles.push(new Particle(midX, midY, COLORS.red));
+                            }
+                        }
+                    }
+                }
+
+                // Check blocks
+                for (let i = this.blocks.length - 1; i >= 0; i--) {
+                    const block = this.blocks[i];
+                    const pos = block.getWorldPosition(this.currentShape.x, this.currentShape.y, this.currentShape.rotation);
+
+                    // Check if laser intersects block (check all 4 corners)
+                    const corners = [
+                        { x: pos.x, y: pos.y },
+                        { x: pos.x + block.width, y: pos.y },
+                        { x: pos.x + block.width, y: pos.y + block.height },
+                        { x: pos.x, y: pos.y + block.height }
+                    ];
+
+                    let hit = false;
+                    for (let j = 0; j < corners.length; j++) {
+                        const c1 = corners[j];
+                        const c2 = corners[(j + 1) % corners.length];
+                        if (laser.intersectsLine(c1.x, c1.y, c2.x, c2.y)) {
+                            hit = true;
+                            break;
+                        }
+                    }
+
+                    if (hit) {
+                        // Destroy block
+                        const blockCenterX = pos.x + block.width / 2;
+                        const blockCenterY = pos.y + block.height / 2;
+
+                        // Create particles
+                        for (let p = 0; p < 10; p++) {
+                            this.particles.push(new Particle(blockCenterX, blockCenterY, block.color));
+                        }
+
+                        this.blocks.splice(i, 1);
+
+                        // Play sound
+                        this.soundSystem.blockBreak();
+
+                        // Check level completion
+                        if (this.blocks.length === 0 && !this.bossMode) {
+                            this.levelUp();
+                        }
+                    }
+                }
             }
         }
 
@@ -1450,8 +1996,14 @@ class Game {
 
     spawnBoss() {
         this.bossMode = true;
-        this.boss = new Boss();
+        this.boss = new Hypercube();
         this.blocks = [];
+        this.floatingTexts.push(new FloatingText(
+            CANVAS_WIDTH / 2,
+            CANVAS_HEIGHT / 2 - 50,
+            'HYPERCUBE APPROACHING',
+            COLORS.red
+        ));
     }
 
     endGame(victory) {
@@ -1474,35 +2026,43 @@ class Game {
     }
 
     fadeOutMusic() {
+        const currentTrack = this.tracks[this.currentTrack];
+        if (!currentTrack) return;
+
         const fadeAudio = setInterval(() => {
-            if (this.music.volume > 0.1) {
-                this.music.volume -= 0.1;
+            if (currentTrack.volume > 0.1) {
+                currentTrack.volume -= 0.1;
             } else {
                 clearInterval(fadeAudio);
-                this.music.pause();
-                this.music.volume = 1.0; // Reset for next play
+                currentTrack.pause();
+                currentTrack.volume = 1.0; // Reset for next play
             }
         }, 100);
     }
 
     pauseGame() {
         this.state = 'paused';
-        this.music.pause();
+        const currentTrack = this.tracks[this.currentTrack];
+        if (currentTrack) currentTrack.pause();
         document.getElementById('pause-overlay').classList.add('active');
     }
 
     resumeGame() {
         this.state = 'playing';
-        if (this.music.src) {
-            this.music.play().catch(e => console.log('Audio resume failed:', e));
+        const currentTrack = this.tracks[this.currentTrack];
+        if (currentTrack && currentTrack.src) {
+            currentTrack.play().catch(e => console.log('Audio resume failed:', e));
         }
         document.getElementById('pause-overlay').classList.remove('active');
     }
 
     showMenu() {
         this.state = 'menu';
-        this.music.pause();
-        this.music.currentTime = 0;
+        // Stop all tracks
+        Object.values(this.tracks).forEach(track => {
+            track.pause();
+            track.currentTime = 0;
+        });
         document.getElementById('menu-overlay').classList.add('active');
         document.getElementById('pause-overlay').classList.remove('active');
         document.getElementById('gameover-overlay').classList.remove('active');
@@ -1542,6 +2102,9 @@ class Game {
 
         // Draw balls
         this.balls.forEach(ball => ball.draw(this.ctx));
+
+        // Draw edge laser beams
+        this.laserBeams.forEach(laser => laser.draw(this.ctx));
 
         // Draw powerups
         this.powerups.forEach(powerup => powerup.draw(this.ctx));
