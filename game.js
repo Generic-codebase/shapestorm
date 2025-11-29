@@ -8,8 +8,8 @@ const CANVAS_HEIGHT = 700;
 const BASE_BALL_SPEED = 1.5; // Even slower baseline
 const BALL_SPEED_INCREMENT = 0.15; // Speed increase per level
 const MAX_BALLS = 8; // Maximum balls allowed
-const SHAPE_SPAWN_TIME = 15000; // 15 seconds
-const POWERUP_DURATION = 15000; // 15 seconds
+const SHAPE_SPAWN_TIME = 4000; // 4 seconds
+const POWERUP_DURATION = 4000; // 4 seconds
 const BOSS_HP = 50;
 const SHAPE_SIZE = 320; // Larger shape (was 280)
 
@@ -1593,10 +1593,26 @@ class Game {
                             this.particles.push(new Particle(textX, textY, block.color));
                         }
 
-                        // Spawn powerup
+                        // Spawn powerup with weighted probabilities (shield is rare)
                         if (block.type === 'special') {
-                            const powerupTypes = ['multiply', 'extra_life', 'shield', 'power', 'regen', 'storm'];
-                            const type = randomChoice(powerupTypes);
+                            const rand = Math.random();
+                            let type;
+
+                            // Weighted distribution: shield is 10%, others are more common
+                            if (rand < 0.22) {
+                                type = 'multiply';
+                            } else if (rand < 0.44) {
+                                type = 'extra_life';
+                            } else if (rand < 0.54) {
+                                type = 'shield'; // Only 10% chance
+                            } else if (rand < 0.70) {
+                                type = 'power';
+                            } else if (rand < 0.85) {
+                                type = 'regen';
+                            } else {
+                                type = 'storm';
+                            }
+
                             this.powerups.push(new PowerUp(blockPos.x + block.width / 2, blockPos.y + block.height / 2, type));
                         }
 

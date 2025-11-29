@@ -4,17 +4,23 @@
 
 The game features a **3-track progressive music system** with BPM synchronization and unique gameplay mechanics for each track!
 
-### Audio Elements (index.html:104-112)
+### Audio Elements (index.html:106-112)
 ```html
 <!-- Track 1: 122 BPM - Opening gameplay -->
-<audio id="track-1" src="https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3"></audio>
+<audio id="track-1" src="Track 1.mp3"></audio>
 
 <!-- Track 2: 120 BPM - Mid-game with laser beams -->
-<audio id="track-2" src="https://assets.mixkit.co/music/preview/mixkit-in-slow-motion-funk-1118.mp3"></audio>
+<audio id="track-2" src="Track 2.mp3"></audio>
 
 <!-- Track 3: 220 BPM - Boss fight -->
-<audio id="track-3" src="https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3"></audio>
+<audio id="track-3" src="Track 3.mp3"></audio>
 ```
+
+**Music Files Required:**
+- Place `Track 1.mp3`, `Track 2.mp3`, and `Track 3.mp3` in the same folder as `index.html`
+- Track 1: 122 BPM retrowave/synthwave music
+- Track 2: 120 BPM with intense energy (laser chaos phase)
+- Track 3: 220 BPM high-energy boss fight music
 
 ### Track Progression System
 The game automatically transitions between tracks:
