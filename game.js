@@ -92,6 +92,13 @@ class SoundSystem {
         this.playTone(440, 0.1, 'sine', 0.15);
         setTimeout(() => this.playTone(554.37, 0.1, 'sine', 0.15), 100);
     }
+
+    laserFire() {
+        // "Pew" laser sound effect
+        this.playTone(1200, 0.08, 'square', 0.25);
+        setTimeout(() => this.playTone(800, 0.12, 'square', 0.2), 40);
+        setTimeout(() => this.playTone(400, 0.15, 'sine', 0.15), 80);
+    }
 }
 
 // ============================================================================
@@ -651,14 +658,19 @@ class Particle {
 // ============================================================================
 
 class LaserBeam {
-    constructor(side) {
+    constructor(side, soundSystem, game) {
         this.side = side; // 'top', 'right', 'bottom', 'left'
         this.chargeTime = 1000; // 1 second charge
         this.fireTime = 500; // 0.5 second fire
         this.age = 0;
         this.state = 'charging'; // 'charging', 'firing', 'done'
-        this.width = 3; // Narrow beam
+        this.width = 6; // Wider beam for better visibility
         this.color = COLORS.red;
+        this.soundSystem = soundSystem;
+        this.game = game;
+        this.justFired = false; // Track if we just fired (for screen flash)
+        this.afterimages = []; // Trail of afterimages
+        this.particles = []; // Laser particles
 
         // Calculate beam position and direction
         switch(side) {
@@ -691,12 +703,75 @@ class LaserBeam {
 
     update(deltaTime) {
         this.age += deltaTime;
+        this.justFired = false;
 
         if (this.state === 'charging' && this.age >= this.chargeTime) {
             this.state = 'firing';
             this.age = 0;
+            this.justFired = true; // Trigger screen flash
+            // Play laser sound
+            if (this.soundSystem) {
+                this.soundSystem.laserFire();
+            }
+            // Create initial burst of particles
+            this.createParticles();
         } else if (this.state === 'firing' && this.age >= this.fireTime) {
             this.state = 'done';
+        }
+
+        // Update afterimages
+        for (let i = this.afterimages.length - 1; i >= 0; i--) {
+            this.afterimages[i].alpha -= 0.05;
+            if (this.afterimages[i].alpha <= 0) {
+                this.afterimages.splice(i, 1);
+            }
+        }
+
+        // Update particles
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.age += deltaTime;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha = 1 - (p.age / p.lifetime);
+            if (p.age >= p.lifetime) {
+                this.particles.splice(i, 1);
+            }
+        }
+
+        // Create afterimages while firing
+        if (this.state === 'firing') {
+            this.afterimages.push({
+                x1: this.x1,
+                y1: this.y1,
+                x2: this.x2,
+                y2: this.y2,
+                alpha: 0.8,
+                width: this.width
+            });
+        }
+    }
+
+    createParticles() {
+        // Create particles along the laser path
+        const steps = 20;
+        for (let i = 0; i < steps; i++) {
+            const t = i / steps;
+            const x = this.x1 + (this.x2 - this.x1) * t;
+            const y = this.y1 + (this.y2 - this.y1) * t;
+
+            for (let j = 0; j < 3; j++) {
+                this.particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    age: 0,
+                    lifetime: 300 + Math.random() * 200,
+                    alpha: 1,
+                    size: 2 + Math.random() * 2
+                });
+            }
         }
     }
 
@@ -726,22 +801,57 @@ class LaserBeam {
             ctx.fill();
             ctx.restore();
         } else if (this.state === 'firing') {
+            // Draw afterimages (trail effect)
+            for (let i = this.afterimages.length - 1; i >= 0; i--) {
+                const afterimage = this.afterimages[i];
+                ctx.save();
+                ctx.globalAlpha = afterimage.alpha;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.width;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.moveTo(afterimage.x1, afterimage.y1);
+                ctx.lineTo(afterimage.x2, afterimage.y2);
+                ctx.stroke();
+                ctx.restore();
+            }
+
             // Draw firing beam
             ctx.save();
             ctx.strokeStyle = this.color;
             ctx.lineWidth = this.width;
-            ctx.shadowBlur = 20;
+            ctx.shadowBlur = 25;
             ctx.shadowColor = this.color;
             ctx.beginPath();
             ctx.moveTo(this.x1, this.y1);
             ctx.lineTo(this.x2, this.y2);
             ctx.stroke();
 
-            // Draw intense glow
+            // Draw intense glow layers
             ctx.lineWidth = this.width * 2;
-            ctx.globalAlpha = 0.5;
+            ctx.globalAlpha = 0.6;
+            ctx.shadowBlur = 35;
+            ctx.stroke();
+
+            ctx.lineWidth = this.width * 3;
+            ctx.globalAlpha = 0.3;
+            ctx.shadowBlur = 45;
             ctx.stroke();
             ctx.restore();
+
+            // Draw particles
+            for (const particle of this.particles) {
+                ctx.save();
+                ctx.globalAlpha = particle.alpha;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
         }
     }
 
@@ -1610,6 +1720,7 @@ class Game {
         this.particles = [];
         this.laserBeams = []; // For Track 2 lasers
         this.blackHole = null; // Black hole effect during shape swap
+        this.screenFlashAlpha = 0; // Screen flash effect for laser fire
 
         // Initialize sound system
         this.soundSystem = new SoundSystem();
@@ -1917,16 +2028,30 @@ class Game {
                 this.laserSpawnTimer = 0;
                 const sides = ['top', 'bottom', 'left', 'right'];
                 const randomSide = sides[Math.floor(Math.random() * sides.length)];
-                this.laserBeams.push(new LaserBeam(randomSide));
+                this.laserBeams.push(new LaserBeam(randomSide, this.soundSystem, this));
             }
         }
 
         // Update laser beams
         for (let i = this.laserBeams.length - 1; i >= 0; i--) {
-            this.laserBeams[i].update(deltaTime);
-            if (this.laserBeams[i].isDone()) {
+            const laser = this.laserBeams[i];
+            laser.update(deltaTime);
+
+            // Trigger screen flash when laser fires
+            if (laser.justFired) {
+                this.screenFlashAlpha = 0.15;
+                laser.justFired = false;
+            }
+
+            if (laser.isDone()) {
                 this.laserBeams.splice(i, 1);
             }
+        }
+
+        // Update screen flash (fade out)
+        if (this.screenFlashAlpha > 0) {
+            this.screenFlashAlpha -= deltaTime * 0.008; // Fade out over ~200ms
+            if (this.screenFlashAlpha < 0) this.screenFlashAlpha = 0;
         }
 
         // Update black hole effect
@@ -2641,17 +2766,18 @@ class Game {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-        // Draw upcoming shapes preview (behind main shape)
+        // Draw next shape preview (behind main shape) - shows upcoming shape from pool
         const centerX = CANVAS_WIDTH / 2;
         const centerY = CANVAS_HEIGHT / 2;
-        for (let i = Math.min(3, this.shapePool.length) - 1; i >= 0; i--) {
-            const shape = this.shapePool[i];
-            const ShapeClass = shape.class;
+        if (this.shapePool.length > 0) {
+            // Only show the NEXT shape (first in pool) as faded preview
+            const nextShape = this.shapePool[0];
+            const ShapeClass = nextShape.class;
             const previewShape = new ShapeClass(centerX, centerY, SHAPE_SIZE);
 
-            // Calculate scale and alpha based on position in queue
-            const scale = 0.3 + (i * 0.15); // 0.3, 0.45, 0.6
-            const alpha = 0.15 + (i * 0.1); // 0.15, 0.25, 0.35
+            // Large, very faded preview
+            const scale = 0.85; // Large preview
+            const alpha = 0.12; // Very faded
 
             previewShape.walls = new Array(previewShape.getSides()).fill(true);
             previewShape.draw(this.ctx, scale, alpha);
@@ -2691,6 +2817,15 @@ class Game {
 
         // Draw particles
         this.particles.forEach(particle => particle.draw(this.ctx));
+
+        // Draw screen flash effect (from laser fire)
+        if (this.screenFlashAlpha > 0) {
+            this.ctx.save();
+            this.ctx.globalAlpha = this.screenFlashAlpha;
+            this.ctx.fillStyle = '#fff';
+            this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            this.ctx.restore();
+        }
     }
 
     updateUI() {
@@ -2707,6 +2842,15 @@ class Game {
     updateShapePool() {
         const poolDiv = document.getElementById('pool-shapes');
         poolDiv.innerHTML = '';
+
+        // Shape symbols mapping
+        const shapeSymbols = {
+            'Triangle': '▲',
+            'Square': '■',
+            'Pentagon': '⬟',
+            'Hexagon': '⬡',
+            'Octagon': '⯃'
+        };
 
         this.shapePool.forEach((shape, index) => {
             const div = document.createElement('div');
@@ -2726,7 +2870,9 @@ class Game {
                 }
             }
 
-            div.textContent = shape.type.substring(0, 3).toUpperCase();
+            // Use shape symbol instead of text
+            div.textContent = shapeSymbols[shape.type] || '●';
+            div.style.fontSize = '16px'; // Larger for symbols
             poolDiv.appendChild(div);
         });
     }
