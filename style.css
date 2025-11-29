@@ -49,11 +49,7 @@ body {
 #game-canvas {
     display: block;
     background: rgba(0, 0, 0, 0.8);
-    border: 2px solid #0ff;
-    box-shadow:
-        0 0 10px #0ff,
-        0 0 20px #0ff,
-        inset 0 0 20px rgba(0, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* UI Overlay */
@@ -76,18 +72,13 @@ body {
     margin-bottom: 15px;
     padding: 15px 20px;
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 100%);
-    border-bottom: 3px solid;
-    border-image: linear-gradient(90deg, #0ff, #f0f, #ff0, #0f0, #0ff) 1;
-    box-shadow:
-        0 0 20px rgba(0, 255, 255, 0.3),
-        0 5px 30px rgba(255, 0, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #score-display, #lives-display, #level-display, #difficulty-display {
     background: linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(20, 0, 40, 0.8) 100%);
-    border: 2px solid;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     padding: 8px 16px;
-    box-shadow: 0 0 15px, inset 0 0 10px rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -116,18 +107,15 @@ body {
 }
 
 #score-display {
-    border-color: #f0f;
-    box-shadow: 0 0 15px #f0f, inset 0 0 10px rgba(255, 0, 255, 0.1);
+    border-color: rgba(255, 0, 255, 0.3);
 }
 
 #lives-display {
-    border-color: #ff0;
-    box-shadow: 0 0 15px #ff0, inset 0 0 10px rgba(255, 255, 0, 0.1);
+    border-color: rgba(255, 255, 0, 0.3);
 }
 
 #level-display {
-    border-color: #0f0;
-    box-shadow: 0 0 15px #0f0, inset 0 0 10px rgba(0, 255, 0, 0.1);
+    border-color: rgba(0, 255, 0, 0.3);
 }
 
 .label {
@@ -161,9 +149,8 @@ body {
 /* Powerups Bar */
 #powerups-bar {
     background: linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 40, 20, 0.8) 100%);
-    border: 2px solid #0f0;
+    border: 1px solid rgba(0, 255, 0, 0.3);
     padding: 8px 16px;
-    box-shadow: 0 0 15px #0f0, inset 0 0 10px rgba(0, 255, 0, 0.1);
     min-width: 200px;
     max-width: 300px;
     clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
@@ -216,9 +203,8 @@ body {
 /* Shape Pool */
 #shape-pool {
     background: linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(40, 0, 40, 0.8) 100%);
-    border: 2px solid #f0f;
+    border: 1px solid rgba(255, 0, 255, 0.3);
     padding: 8px 16px;
-    box-shadow: 0 0 15px #f0f, inset 0 0 10px rgba(255, 0, 255, 0.1);
     min-width: 200px;
     clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
     position: relative;
@@ -254,7 +240,7 @@ body {
 .pool-shape {
     width: 36px;
     height: 36px;
-    border: 2px solid #0ff;
+    border: 1px solid rgba(0, 255, 255, 0.4);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -283,20 +269,17 @@ body {
 
 .pool-shape.ready {
     animation: shapeReady 0.5s ease-in-out infinite;
-    border-color: #ff0;
-    box-shadow: 0 0 15px #ff0;
+    border-color: rgba(255, 255, 0, 0.8);
 }
 
 @keyframes shapeReady {
     0%, 100% {
         transform: scale(1);
-        border-color: #ff0;
-        box-shadow: 0 0 15px #ff0;
+        border-color: rgba(255, 255, 0, 0.8);
     }
     50% {
         transform: scale(1.1);
-        border-color: #f80;
-        box-shadow: 0 0 25px #f80;
+        border-color: rgba(255, 136, 0, 0.9);
     }
 }
 

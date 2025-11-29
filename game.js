@@ -2075,24 +2075,24 @@ class Game {
                             this.particles.push(new Particle(textX, textY, block.color));
                         }
 
-                        // Spawn powerup with weighted probabilities (shield is rare)
+                        // Spawn powerup with weighted probabilities (shield 10%, extra_life rare at 5%)
                         if (block.type === 'special') {
                             const rand = Math.random();
                             let type;
 
-                            // Weighted distribution: shield is 10%, others are more common
-                            if (rand < 0.22) {
+                            // Weighted distribution: extra_life is very rare (5%), shield is 10%
+                            if (rand < 0.25) {
                                 type = 'multiply';
-                            } else if (rand < 0.44) {
-                                type = 'extra_life';
-                            } else if (rand < 0.54) {
-                                type = 'shield'; // Only 10% chance
-                            } else if (rand < 0.70) {
+                            } else if (rand < 0.35) {
+                                type = 'shield'; // 10% chance
+                            } else if (rand < 0.55) {
                                 type = 'power';
-                            } else if (rand < 0.85) {
+                            } else if (rand < 0.75) {
                                 type = 'regen';
-                            } else {
+                            } else if (rand < 0.95) {
                                 type = 'storm';
+                            } else {
+                                type = 'extra_life'; // Very rare - only 5% chance
                             }
 
                             this.powerups.push(new PowerUp(blockPos.x + block.width / 2, blockPos.y + block.height / 2, type));
