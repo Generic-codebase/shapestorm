@@ -115,7 +115,7 @@ class Ball {
         this.y = y;
         this.vx = vx;
         this.vy = vy;
-        this.radius = 8;
+        this.radius = 4; // 50% smaller
         this.color = COLORS.cyan;
         this.trail = [];
         this.maxTrail = 10;
@@ -202,11 +202,14 @@ class GeometricShape {
         return vertices;
     }
 
-    draw(ctx) {
+    draw(ctx, scale = 1.0, alpha = 1.0) {
         const vertices = this.getVertices();
 
         // Determine color (flash to yellow if shape ready)
         const displayColor = this.flashReady ? COLORS.yellow : this.color;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
 
         // Draw filled shape (transparent center - no fill)
         // ctx.beginPath();
@@ -218,6 +221,11 @@ class GeometricShape {
         // ctx.fillStyle = this.color + '11';
         // ctx.fill();
 
+        // Apply scale transformation
+        ctx.translate(this.x, this.y);
+        ctx.scale(scale, scale);
+        ctx.translate(-this.x, -this.y);
+
         // Draw walls
         for (let i = 0; i < vertices.length; i++) {
             const v1 = vertices[i];
@@ -227,9 +235,11 @@ class GeometricShape {
                 ctx.strokeStyle = displayColor;
                 ctx.lineWidth = this.flashReady ? 5 : 4;
             } else {
-                ctx.strokeStyle = this.color + '33';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([5, 5]);
+                // Broken walls - flickering dimly colored lines
+                const flicker = Math.random() > 0.5 ? 0.2 : 0.1;
+                ctx.strokeStyle = this.color + Math.floor(flicker * 100).toString(16).padStart(2, '0');
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
             }
 
             ctx.beginPath();
@@ -257,6 +267,8 @@ class GeometricShape {
             ctx.fillStyle = displayColor;
             ctx.fill();
         });
+
+        ctx.restore();
     }
 
     breakWall(wallIndex) {
@@ -416,8 +428,8 @@ class Block {
         // Store relative position to shape center
         this.relativeX = x - shapeX;
         this.relativeY = y - shapeY;
-        this.width = 40;
-        this.height = 40;
+        this.width = 20; // 50% smaller
+        this.height = 20; // 50% smaller
         this.type = type; // 'normal' or 'special' (drops powerup)
         this.hp = type === 'special' ? 2 : 1;
         this.color = type === 'special' ? COLORS.yellow : COLORS.green;
@@ -548,6 +560,55 @@ class PowerUp {
     checkCollision(ball) {
         if (this.collected) return false;
         return distance(this.x, this.y, ball.x, ball.y) < this.radius + ball.radius;
+    }
+}
+
+// ============================================================================
+// PARTICLE CLASS
+// ============================================================================
+
+class Particle {
+    constructor(x, y, color = COLORS.cyan) {
+        this.x = x;
+        this.y = y;
+        this.vx = randomRange(-3, 3);
+        this.vy = randomRange(-3, 3);
+        this.radius = randomRange(1, 3);
+        this.color = color;
+        this.lifetime = randomRange(300, 600);
+        this.age = 0;
+        this.gravity = 0.1;
+    }
+
+    update(deltaTime) {
+        this.age += deltaTime;
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+        this.vx *= 0.99;
+        this.vy *= 0.99;
+    }
+
+    draw(ctx) {
+        const alpha = 1 - (this.age / this.lifetime);
+        if (alpha <= 0) return;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+
+        // Glow
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = this.color;
+        ctx.fill();
+        ctx.restore();
+    }
+
+    isDead() {
+        return this.age >= this.lifetime;
     }
 }
 
@@ -717,6 +778,7 @@ class Game {
         this.boss = null;
         this.bossMode = false;
         this.floatingTexts = [];
+        this.particles = [];
 
         // Initialize sound system
         this.soundSystem = new SoundSystem();
@@ -815,6 +877,8 @@ class Game {
         this.currentShape = new Square(centerX, centerY, SHAPE_SIZE);
         this.currentShape.targetRotation = 0;
         this.currentShape.rotationVelocity = 0;
+        this.currentShape.scale = 1.0;
+        this.currentShape.alpha = 1.0;
 
         // Add shapes to pool
         this.addShapeToPool();
@@ -859,13 +923,17 @@ class Game {
         // Check if shape is ready
         if (now < nextShape.spawnTime) return;
 
-        // Create new shape at current position (centered)
+        // Create new shape at current position (centered) with zoom animation
         const ShapeClass = nextShape.class;
         const centerX = CANVAS_WIDTH / 2;
         const centerY = CANVAS_HEIGHT / 2;
         this.currentShape = new ShapeClass(centerX, centerY, SHAPE_SIZE);
         this.currentShape.targetRotation = 0;
         this.currentShape.rotationVelocity = 0;
+        this.currentShape.scale = 0.3; // Start small
+        this.currentShape.alpha = 0.3; // Start transparent
+        this.currentShape.targetScale = 1.0;
+        this.currentShape.targetAlpha = 1.0;
 
         // Remove from pool
         this.shapePool.shift();
@@ -881,12 +949,12 @@ class Game {
         this.blocks = [];
         if (!this.currentShape) return;
 
-        const blockSize = 35;
-        const spacing = 8;
+        const blockSize = 20; // 50% smaller
+        const spacing = 10; // More spacing
         const gridSize = blockSize + spacing;
 
-        // Calculate grid bounds based on shape size
-        const gridRadius = this.currentShape.size * 0.7; // 70% of shape size for padding
+        // Calculate grid bounds based on shape size (more padding from edges)
+        const gridRadius = this.currentShape.size * 0.5; // 50% of shape size for more edge spacing
         const startX = this.currentShape.x - gridRadius;
         const startY = this.currentShape.y - gridRadius;
         const endX = this.currentShape.x + gridRadius;
@@ -902,8 +970,7 @@ class Game {
                 if (this.currentShape.isPointInside(blockCenterX, blockCenterY)) {
                     const isSpecial = Math.random() < 0.15;
                     const block = new Block(x, y, isSpecial ? 'special' : 'normal', this.currentShape.x, this.currentShape.y);
-                    block.width = blockSize;
-                    block.height = blockSize;
+                    // Block size already set in constructor
                     this.blocks.push(block);
                 }
             }
@@ -950,6 +1017,11 @@ class Game {
                         // Play wall bounce sound
                         this.soundSystem.wallBounce();
 
+                        // Create wall bounce particles
+                        for (let p = 0; p < 5; p++) {
+                            this.particles.push(new Particle(ball.x, ball.y, COLORS.cyan));
+                        }
+
                         // Break wall if not shielded
                         if (!shieldActive && !regenActive) {
                             this.currentShape.breakWall(wallIndex);
@@ -991,6 +1063,11 @@ class Game {
                         const textY = blockPos.y + block.height / 2;
                         this.floatingTexts.push(new FloatingText(textX, textY, '+' + Math.floor(points), COLORS.green));
 
+                        // Create particle explosion
+                        for (let p = 0; p < 15; p++) {
+                            this.particles.push(new Particle(textX, textY, block.color));
+                        }
+
                         // Spawn powerup
                         if (block.type === 'special') {
                             const powerupTypes = ['multiply', 'extra_life', 'shield', 'power', 'regen', 'storm'];
@@ -1022,6 +1099,11 @@ class Game {
 
                     // Show floating points
                     this.floatingTexts.push(new FloatingText(this.boss.x, this.boss.y - 50, '+' + Math.floor(points), COLORS.red));
+
+                    // Create boss hit particles
+                    for (let p = 0; p < 20; p++) {
+                        this.particles.push(new Particle(ball.x, ball.y, COLORS.red));
+                    }
 
                     // Bounce ball
                     const dx = ball.x - this.boss.x;
@@ -1070,6 +1152,16 @@ class Game {
             }
         }
 
+        // Update particles
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            this.particles[i].update(deltaTime);
+
+            // Remove if dead
+            if (this.particles[i].isDead()) {
+                this.particles.splice(i, 1);
+            }
+        }
+
         // Update boss
         if (this.boss) {
             this.boss.update(deltaTime);
@@ -1077,6 +1169,16 @@ class Game {
 
         // Update shape rotation with smooth elasticity
         if (this.currentShape) {
+            // Animate shape scale and alpha (zoom in effect)
+            if (this.currentShape.scale < 1.0) {
+                this.currentShape.scale += 0.02;
+                if (this.currentShape.scale > 1.0) this.currentShape.scale = 1.0;
+            }
+            if (this.currentShape.alpha < 1.0) {
+                this.currentShape.alpha += 0.03;
+                if (this.currentShape.alpha > 1.0) this.currentShape.alpha = 1.0;
+            }
+
             // Check if next shape in pool is ready - flash current shape
             const flashInterval = 500; // Flash every 500ms
             const hasReadyShape = this.shapePool.length > 0 && now >= this.shapePool[0].spawnTime;
@@ -1242,9 +1344,25 @@ class Game {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+        // Draw upcoming shapes preview (behind main shape)
+        const centerX = CANVAS_WIDTH / 2;
+        const centerY = CANVAS_HEIGHT / 2;
+        for (let i = Math.min(3, this.shapePool.length) - 1; i >= 0; i--) {
+            const shape = this.shapePool[i];
+            const ShapeClass = shape.class;
+            const previewShape = new ShapeClass(centerX, centerY, SHAPE_SIZE);
+
+            // Calculate scale and alpha based on position in queue
+            const scale = 0.3 + (i * 0.15); // 0.3, 0.45, 0.6
+            const alpha = 0.15 + (i * 0.1); // 0.15, 0.25, 0.35
+
+            previewShape.walls = new Array(previewShape.getSides()).fill(true);
+            previewShape.draw(this.ctx, scale, alpha);
+        }
+
         // Draw current shape
         if (this.currentShape) {
-            this.currentShape.draw(this.ctx);
+            this.currentShape.draw(this.ctx, this.currentShape.scale || 1.0, this.currentShape.alpha || 1.0);
         }
 
         // Draw blocks (inside the shape, so they rotate with it)
@@ -1265,6 +1383,9 @@ class Game {
 
         // Draw floating texts (points)
         this.floatingTexts.forEach(text => text.draw(this.ctx));
+
+        // Draw particles
+        this.particles.forEach(particle => particle.draw(this.ctx));
     }
 
     updateUI() {
