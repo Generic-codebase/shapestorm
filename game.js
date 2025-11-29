@@ -407,6 +407,21 @@ class GeometricShape {
 
 class Triangle extends GeometricShape {
     getSides() { return 3; }
+
+    getVertices() {
+        // Triangles are 15% larger for easier gameplay
+        const sides = this.getSides();
+        const vertices = [];
+        const enlargedSize = this.size * 1.15;
+        for (let i = 0; i < sides; i++) {
+            const angle = (Math.PI * 2 * i) / sides + this.rotation;
+            vertices.push({
+                x: this.x + Math.cos(angle) * enlargedSize,
+                y: this.y + Math.sin(angle) * enlargedSize
+            });
+        }
+        return vertices;
+    }
 }
 
 class Square extends GeometricShape {
