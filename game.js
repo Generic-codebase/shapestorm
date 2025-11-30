@@ -139,6 +139,8 @@ class Ball {
         this.lastContactPoint = null;
         this.supercharged = false;
         this.superchargedEndTime = 0;
+        this.collisionGlow = 0; // 0-1 for ball-to-ball collision glow
+        this.collisionBoostTimer = 0; // Timer for temporary force boost
     }
 
     update(speedMultiplier = 1) {
@@ -149,10 +151,23 @@ class Ball {
             this.trail.shift();
         }
 
+        // Fade out collision glow
+        if (this.collisionGlow > 0) {
+            this.collisionGlow -= 0.05;
+            if (this.collisionGlow < 0) this.collisionGlow = 0;
+        }
+
+        // Decrease collision boost timer
+        if (this.collisionBoostTimer > 0) {
+            this.collisionBoostTimer--;
+        }
+
         // Apply supercharge speed boost
         const superchargeMultiplier = this.supercharged ? 2 : 1;
-        this.x += this.vx * speedMultiplier * superchargeMultiplier;
-        this.y += this.vy * speedMultiplier * superchargeMultiplier;
+        // Apply collision boost (1.5x for 60 frames / ~1 second)
+        const collisionBoostMultiplier = this.collisionBoostTimer > 0 ? 1.5 : 1;
+        this.x += this.vx * speedMultiplier * superchargeMultiplier * collisionBoostMultiplier;
+        this.y += this.vy * speedMultiplier * superchargeMultiplier * collisionBoostMultiplier;
     }
 
     draw(ctx) {
@@ -176,13 +191,26 @@ class Ball {
         ctx.lineWidth = this.supercharged ? 3 : 2;
         ctx.stroke();
 
-        // Enhanced glow for supercharged
-        ctx.shadowBlur = this.supercharged ? 30 : 20;
-        ctx.shadowColor = displayColor;
+        // Enhanced glow for supercharged or collision
+        const baseBlur = this.supercharged ? 30 : 20;
+        const collisionBlur = this.collisionGlow * 40; // Extra glow on collision
+        ctx.shadowBlur = baseBlur + collisionBlur;
+        ctx.shadowColor = this.collisionGlow > 0 ? COLORS.magenta : displayColor;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+
+        // Extra collision glow ring
+        if (this.collisionGlow > 0) {
+            ctx.strokeStyle = COLORS.magenta;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = this.collisionGlow;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
     }
 
     clone() {
@@ -500,16 +528,39 @@ class Block {
         ctx.translate(pos.x + this.width / 2, pos.y + this.height / 2);
         ctx.rotate(shapeRotation);
 
-        ctx.fillStyle = this.color + '44';
-        ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
-
+        // Draw block as 4 individual lines
         ctx.strokeStyle = this.color;
         ctx.lineWidth = 2;
-        ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
-
         ctx.shadowBlur = 10;
         ctx.shadowColor = this.color;
-        ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
+
+        const halfW = this.width / 2;
+        const halfH = this.height / 2;
+
+        // Top line
+        ctx.beginPath();
+        ctx.moveTo(-halfW, -halfH);
+        ctx.lineTo(halfW, -halfH);
+        ctx.stroke();
+
+        // Right line
+        ctx.beginPath();
+        ctx.moveTo(halfW, -halfH);
+        ctx.lineTo(halfW, halfH);
+        ctx.stroke();
+
+        // Bottom line
+        ctx.beginPath();
+        ctx.moveTo(halfW, halfH);
+        ctx.lineTo(-halfW, halfH);
+        ctx.stroke();
+
+        // Left line
+        ctx.beginPath();
+        ctx.moveTo(-halfW, halfH);
+        ctx.lineTo(-halfW, -halfH);
+        ctx.stroke();
+
         ctx.shadowBlur = 0;
 
         // HP indicator for special blocks
@@ -542,6 +593,115 @@ class Block {
             return true; // Block destroyed
         }
         return false;
+    }
+}
+
+// ============================================================================
+// BLOCK FRAGMENT CLASS
+// ============================================================================
+
+class BlockFragment {
+    constructor(x1, y1, x2, y2, color, hitDirectionX, hitDirectionY) {
+        // Store line endpoints
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+
+        // Center point of the fragment
+        this.centerX = (x1 + x2) / 2;
+        this.centerY = (y1 + y2) / 2;
+
+        this.color = color;
+        this.alpha = 1.0;
+        this.lifetime = 1000; // 1 second
+        this.age = 0;
+
+        // Physics - fragments fly off in direction of hit with random variation
+        const baseSpeed = 2 + Math.random() * 3;
+        const randomAngle = (Math.random() - 0.5) * Math.PI * 0.5; // ±45° variation
+        const angle = Math.atan2(hitDirectionY, hitDirectionX) + randomAngle;
+
+        this.vx = Math.cos(angle) * baseSpeed;
+        this.vy = Math.sin(angle) * baseSpeed;
+
+        // 3D rotation simulation (rotation around X, Y, Z axes)
+        this.rotationX = Math.random() * Math.PI * 2;
+        this.rotationY = Math.random() * Math.PI * 2;
+        this.rotationZ = Math.random() * Math.PI * 2;
+        this.rotationSpeedX = (Math.random() - 0.5) * 0.2;
+        this.rotationSpeedY = (Math.random() - 0.5) * 0.2;
+        this.rotationSpeedZ = (Math.random() - 0.5) * 0.2;
+
+        // Z-axis depth (starts at 0, moves into/out of screen)
+        this.z = 0;
+        this.vz = (Math.random() - 0.5) * 4; // Random Z velocity
+        this.gravity = 0.15; // Gravity affects Y and Z
+    }
+
+    update(deltaTime) {
+        this.age += deltaTime;
+
+        // Update position
+        this.centerX += this.vx;
+        this.centerY += this.vy;
+        this.z += this.vz;
+
+        // Apply gravity to Y and Z
+        this.vy += this.gravity;
+        this.vz += this.gravity * 0.5;
+
+        // Update rotations
+        this.rotationX += this.rotationSpeedX;
+        this.rotationY += this.rotationSpeedY;
+        this.rotationZ += this.rotationSpeedZ;
+
+        // Update endpoints based on center movement
+        const dx = this.x2 - this.x1;
+        const dy = this.y2 - this.y1;
+        this.x1 = this.centerX - dx / 2;
+        this.y1 = this.centerY - dy / 2;
+        this.x2 = this.centerX + dx / 2;
+        this.y2 = this.centerY + dy / 2;
+
+        // Fade out
+        this.alpha = 1 - (this.age / this.lifetime);
+
+        return this.age >= this.lifetime;
+    }
+
+    draw(ctx) {
+        ctx.save();
+
+        // Translate to center
+        ctx.translate(this.centerX, this.centerY);
+
+        // Apply 3D rotations (simulated with 2D transforms and scaling)
+        // Z rotation affects actual rotation
+        ctx.rotate(this.rotationZ);
+
+        // X and Y rotations affect scale to simulate 3D perspective
+        const scaleX = Math.cos(this.rotationY);
+        const scaleY = Math.cos(this.rotationX);
+        const depthScale = 1 - (Math.abs(this.z) * 0.01); // Further away = smaller
+
+        // Calculate line endpoints relative to center
+        const dx = (this.x2 - this.x1) / 2;
+        const dy = (this.y2 - this.y1) / 2;
+
+        // Draw the line fragment
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = this.alpha;
+        ctx.shadowBlur = 5 * this.alpha;
+        ctx.shadowColor = this.color;
+
+        ctx.beginPath();
+        ctx.moveTo(-dx * scaleX * depthScale, -dy * scaleY * depthScale);
+        ctx.lineTo(dx * scaleX * depthScale, dy * scaleY * depthScale);
+        ctx.stroke();
+
+        ctx.restore();
     }
 }
 
@@ -2046,6 +2206,7 @@ class Game {
         this.waitingToSpawnBoss = false;
         this.floatingTexts = [];
         this.particles = [];
+        this.fragments = []; // Block fragments
         this.laserBeams = []; // For Track 2 lasers
         this.blackHole = null; // Black hole effect during shape swap
         this.screenFlashAlpha = 0; // Screen flash effect for laser fire
@@ -2377,7 +2538,7 @@ class Game {
 
                 // Only place block if its center is inside the shape
                 if (this.currentShape.isPointInside(blockCenterX, blockCenterY)) {
-                    const isSpecial = Math.random() < 0.15;
+                    const isSpecial = Math.random() < 0.1125; // Reduced by 25% (was 0.15)
                     const block = new Block(x, y, isSpecial ? 'special' : 'normal', this.currentShape.x, this.currentShape.y);
                     // Block size already set in constructor
                     this.blocks.push(block);
@@ -2639,8 +2800,45 @@ class Game {
                         const textY = blockPos.y + block.height / 2;
                         this.floatingTexts.push(new FloatingText(textX, textY, '+' + Math.floor(points), COLORS.green));
 
-                        // Create particle explosion
-                        for (let p = 0; p < 15; p++) {
+                        // Create dramatic block fragmentation
+                        // Get hit direction from ball velocity
+                        const hitDirX = ball.vx;
+                        const hitDirY = ball.vy;
+
+                        // Create 4 line fragments (one for each side of the block)
+                        const halfW = block.width / 2;
+                        const halfH = block.height / 2;
+
+                        // Top line
+                        this.fragments.push(new BlockFragment(
+                            blockPos.x, blockPos.y,
+                            blockPos.x + block.width, blockPos.y,
+                            block.color, hitDirX, hitDirY
+                        ));
+
+                        // Right line
+                        this.fragments.push(new BlockFragment(
+                            blockPos.x + block.width, blockPos.y,
+                            blockPos.x + block.width, blockPos.y + block.height,
+                            block.color, hitDirX, hitDirY
+                        ));
+
+                        // Bottom line
+                        this.fragments.push(new BlockFragment(
+                            blockPos.x + block.width, blockPos.y + block.height,
+                            blockPos.x, blockPos.y + block.height,
+                            block.color, hitDirX, hitDirY
+                        ));
+
+                        // Left line
+                        this.fragments.push(new BlockFragment(
+                            blockPos.x, blockPos.y + block.height,
+                            blockPos.x, blockPos.y,
+                            block.color, hitDirX, hitDirY
+                        ));
+
+                        // Create some particles for extra effect
+                        for (let p = 0; p < 5; p++) {
                             this.particles.push(new Particle(textX, textY, block.color));
                         }
 
@@ -2774,6 +2972,68 @@ class Game {
             }
         }
 
+        // Ball-to-ball collision detection
+        if (!shapeSwapping && this.balls.length > 1) {
+            for (let i = 0; i < this.balls.length; i++) {
+                for (let j = i + 1; j < this.balls.length; j++) {
+                    const ball1 = this.balls[i];
+                    const ball2 = this.balls[j];
+
+                    const dx = ball2.x - ball1.x;
+                    const dy = ball2.y - ball1.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const minDist = ball1.radius + ball2.radius;
+
+                    if (distance < minDist) {
+                        // Balls are colliding!
+                        // Normalize collision vector
+                        const nx = dx / distance;
+                        const ny = dy / distance;
+
+                        // Separate balls to prevent overlap
+                        const overlap = minDist - distance;
+                        ball1.x -= nx * overlap * 0.5;
+                        ball1.y -= ny * overlap * 0.5;
+                        ball2.x += nx * overlap * 0.5;
+                        ball2.y += ny * overlap * 0.5;
+
+                        // Calculate relative velocity
+                        const dvx = ball2.vx - ball1.vx;
+                        const dvy = ball2.vy - ball1.vy;
+
+                        // Only bounce if balls are moving toward each other
+                        const relativeVelocity = dvx * nx + dvy * ny;
+                        if (relativeVelocity < 0) {
+                            // Elastic collision with restitution
+                            const restitution = 1.2; // Bouncy collision with slight boost
+                            const impulse = relativeVelocity * restitution;
+
+                            ball1.vx += impulse * nx;
+                            ball1.vy += impulse * ny;
+                            ball2.vx -= impulse * nx;
+                            ball2.vy -= impulse * ny;
+
+                            // Add collision effects
+                            ball1.collisionGlow = 1.0;
+                            ball2.collisionGlow = 1.0;
+                            ball1.collisionBoostTimer = 60; // ~1 second at 60fps
+                            ball2.collisionBoostTimer = 60;
+
+                            // Sound effect
+                            this.soundSystem.playNote(600 + Math.random() * 200, 0.1, 'sine');
+
+                            // Spawn collision particles
+                            const collisionX = ball1.x + nx * ball1.radius;
+                            const collisionY = ball1.y + ny * ball1.radius;
+                            for (let p = 0; p < 5; p++) {
+                                this.particles.push(new Particle(collisionX, collisionY, COLORS.magenta));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Update powerups
         for (let i = this.powerups.length - 1; i >= 0; i--) {
             this.powerups[i].update();
@@ -2836,8 +3096,42 @@ class Game {
                         const blockCenterX = pos.x + block.width / 2;
                         const blockCenterY = pos.y + block.height / 2;
 
-                        // Create particles
-                        for (let p = 0; p < 10; p++) {
+                        // Create dramatic block fragmentation from laser hit
+                        // Get laser direction
+                        const laserDirX = laser.direction === 'left' ? -1 : laser.direction === 'right' ? 1 : 0;
+                        const laserDirY = laser.direction === 'top' ? -1 : laser.direction === 'bottom' ? 1 : 0;
+
+                        // Create 4 line fragments (one for each side of the block)
+                        // Top line
+                        this.fragments.push(new BlockFragment(
+                            pos.x, pos.y,
+                            pos.x + block.width, pos.y,
+                            block.color, laserDirX, laserDirY
+                        ));
+
+                        // Right line
+                        this.fragments.push(new BlockFragment(
+                            pos.x + block.width, pos.y,
+                            pos.x + block.width, pos.y + block.height,
+                            block.color, laserDirX, laserDirY
+                        ));
+
+                        // Bottom line
+                        this.fragments.push(new BlockFragment(
+                            pos.x + block.width, pos.y + block.height,
+                            pos.x, pos.y + block.height,
+                            block.color, laserDirX, laserDirY
+                        ));
+
+                        // Left line
+                        this.fragments.push(new BlockFragment(
+                            pos.x, pos.y + block.height,
+                            pos.x, pos.y,
+                            block.color, laserDirX, laserDirY
+                        ));
+
+                        // Create some particles for extra effect
+                        for (let p = 0; p < 5; p++) {
                             this.particles.push(new Particle(blockCenterX, blockCenterY, block.color));
                         }
 
@@ -2876,6 +3170,14 @@ class Game {
             // Remove if dead
             if (this.particles[i].isDead()) {
                 this.particles.splice(i, 1);
+            }
+        }
+
+        // Update block fragments
+        for (let i = this.fragments.length - 1; i >= 0; i--) {
+            const dead = this.fragments[i].update(deltaTime);
+            if (dead) {
+                this.fragments.splice(i, 1);
             }
         }
 
@@ -3435,6 +3737,9 @@ class Game {
 
         // Draw particles
         this.particles.forEach(particle => particle.draw(this.ctx));
+
+        // Draw block fragments (on separate Z layer)
+        this.fragments.forEach(fragment => fragment.draw(this.ctx));
 
         // Draw screen flash effect (from laser fire)
         if (this.screenFlashAlpha > 0) {
