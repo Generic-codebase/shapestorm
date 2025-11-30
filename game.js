@@ -1007,13 +1007,13 @@ class BlackHole {
             const nx = dx / dist;
             const ny = dy / dist;
 
-            // Gentle gravity that gets stronger as balls get closer
-            // Use inverse distance for natural gravity feel
+            // Gravity that is stronger for objects further away
+            // This creates a sweeping effect that gathers distant balls
             const maxPullDistance = 300; // Maximum distance at which gravity has effect
             if (dist < maxPullDistance) {
-                // Gentle pull that increases as balls get closer
-                const pullStrength = 0.08; // Very gentle base strength
-                const distanceFactor = 1 - (dist / maxPullDistance); // 0 to 1, higher when closer
+                // Pull is stronger when further away, weaker when closer
+                const pullStrength = 0.15; // Increased strength for distant pull
+                const distanceFactor = dist / maxPullDistance; // 0 to 1, higher when further away
                 const force = pullStrength * distanceFactor;
 
                 ball.vx += nx * force;
@@ -1844,7 +1844,7 @@ class Game {
         const centerX = CANVAS_WIDTH / 2;
         const centerY = CANVAS_HEIGHT / 2;
         const angle = Math.random() * Math.PI * 2;
-        const speed = this.currentBallSpeed * this.difficulty;
+        const speed = this.currentBallSpeed * this.difficulty * 1.15; // 15% faster spawn
         this.balls.push(new Ball(
             centerX,
             centerY,
@@ -1859,9 +1859,10 @@ class Game {
         this.currentShape.scale = 1.0;
         this.currentShape.alpha = 1.0;
 
-        // Add shapes to pool
-        this.addShapeToPool();
-        this.addShapeToPool();
+        // Add shapes to pool (max 8)
+        for (let i = 0; i < 8; i++) {
+            this.addShapeToPool();
+        }
 
         // Generate blocks
         this.generateBlocks();
@@ -1971,8 +1972,10 @@ class Game {
         // Remove from pool
         this.shapePool.shift();
 
-        // Add new shape to pool
-        this.addShapeToPool();
+        // Add new shape to pool (maintain max 8)
+        if (this.shapePool.length < 8) {
+            this.addShapeToPool();
+        }
 
         this.lastShapeSwap = now;
         this.updateShapePool();
@@ -2135,6 +2138,10 @@ class Game {
                         ball.vx = (ball.vx / speed) * targetSpeed;
                         ball.vy = (ball.vy / speed) * targetSpeed;
 
+                        // Increase momentum slightly on wall hit (5% increase)
+                        ball.vx *= 1.05;
+                        ball.vy *= 1.05;
+
                         // Push ball away from wall to prevent sticking
                         const vertices = this.currentShape.getVertices();
                         const v1 = vertices[wallIndex];
@@ -2195,6 +2202,10 @@ class Game {
                             ball.vy *= -1;
                         }
                     }
+
+                    // Decrease momentum slightly on block hit (7% reduction)
+                    ball.vx *= 0.93;
+                    ball.vy *= 0.93;
 
                     if (destroyed) {
                         const points = 10 * this.difficulty;
@@ -2322,6 +2333,21 @@ class Game {
                     this.activatePowerup(powerup.type);
                     this.powerups.splice(j, 1);
                 }
+            }
+
+            // Clamp ball speed to min/max based on difficulty
+            const currentSpeed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
+            const minSpeed = BASE_BALL_SPEED * this.difficulty * 0.7; // 70% of base speed
+            const maxSpeed = BASE_BALL_SPEED * this.difficulty * 1.8; // 180% of base speed
+
+            if (currentSpeed < minSpeed && currentSpeed > 0) {
+                const scale = minSpeed / currentSpeed;
+                ball.vx *= scale;
+                ball.vy *= scale;
+            } else if (currentSpeed > maxSpeed) {
+                const scale = maxSpeed / currentSpeed;
+                ball.vx *= scale;
+                ball.vy *= scale;
             }
         }
 
@@ -2514,11 +2540,12 @@ class Game {
             if (this.lives > 0) {
                 // Lose a life and respawn ball
                 this.lives--;
+                const spawnSpeed = BASE_BALL_SPEED * 1.15; // 15% faster spawn
                 this.balls.push(new Ball(
                     this.currentShape.x,
                     this.currentShape.y,
-                    randomRange(-BASE_BALL_SPEED, BASE_BALL_SPEED),
-                    randomRange(-BASE_BALL_SPEED, BASE_BALL_SPEED)
+                    randomRange(-spawnSpeed, spawnSpeed),
+                    randomRange(-spawnSpeed, spawnSpeed)
                 ));
 
                 // Show life lost message
@@ -2843,13 +2870,63 @@ class Game {
         const poolDiv = document.getElementById('pool-shapes');
         poolDiv.innerHTML = '';
 
-        // Shape symbols mapping
-        const shapeSymbols = {
-            'Triangle': '▲',
-            'Square': '■',
-            'Pentagon': '⬟',
-            'Hexagon': '⬡',
-            'Octagon': '⯃'
+        // Shape name abbreviations (first 3 letters)
+        const shapeNames = {
+            'Triangle': 'TRI',
+            'Square': 'SQU',
+            'Pentagon': 'PEN',
+            'Hexagon': 'HEX',
+            'Octagon': 'OCT'
+        };
+
+        // Function to create SVG line art for shapes
+        const createShapeSVG = (shapeType) => {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', '30');
+            svg.setAttribute('height', '30');
+            svg.setAttribute('viewBox', '0 0 30 30');
+
+            const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            polygon.setAttribute('fill', 'none');
+            polygon.setAttribute('stroke', 'currentColor');
+            polygon.setAttribute('stroke-width', '1.5');
+
+            // Generate polygon points based on shape type
+            const sides = {
+                'Triangle': 3,
+                'Square': 4,
+                'Pentagon': 5,
+                'Hexagon': 6,
+                'Octagon': 8
+            }[shapeType] || 4;
+
+            const points = [];
+            const radius = 12;
+            const centerX = 15;
+            const centerY = 15;
+
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 * i) / sides - Math.PI / 2;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                points.push(`${x},${y}`);
+            }
+
+            polygon.setAttribute('points', points.join(' '));
+            svg.appendChild(polygon);
+
+            // Add text label (first 3 letters)
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', '15');
+            text.setAttribute('y', '17');
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('font-size', '6');
+            text.setAttribute('fill', 'currentColor');
+            text.setAttribute('font-weight', 'bold');
+            text.textContent = shapeNames[shapeType] || 'SHP';
+            svg.appendChild(text);
+
+            return svg;
         };
 
         this.shapePool.forEach((shape, index) => {
@@ -2870,9 +2947,9 @@ class Game {
                 }
             }
 
-            // Use shape symbol instead of text
-            div.textContent = shapeSymbols[shape.type] || '●';
-            div.style.fontSize = '16px'; // Larger for symbols
+            // Add SVG line art with text
+            const svg = createShapeSVG(shape.type);
+            div.appendChild(svg);
             poolDiv.appendChild(div);
         });
     }
