@@ -820,7 +820,7 @@ class Particle {
 class LaserBeam {
     constructor(side, soundSystem, game) {
         this.side = side; // 'top', 'right', 'bottom', 'left'
-        this.chargeTime = 1000; // 1 second charge
+        this.chargeTime = 4000; // 4 second charge (increased from 1)
         this.fireTime = 500; // 0.5 second fire
         this.age = 0;
         this.state = 'charging'; // 'charging', 'firing', 'done'
@@ -832,31 +832,75 @@ class LaserBeam {
         this.afterimages = []; // Trail of afterimages
         this.particles = []; // Laser particles
 
-        // Calculate beam position and direction
-        switch(side) {
+        // Rotating circle source
+        this.circleRadius = 15; // Size of the red circle
+        this.rotationAngle = Math.random() * Math.PI * 2; // Start at random angle
+        this.rotationSpeed = 0.02; // Rotation speed around edges
+        this.direction = side; // Store the edge it's rotating on
+
+        // Calculate initial circle position on edge
+        this.updateCirclePosition();
+    }
+
+    updateCirclePosition() {
+        // Rotate the circle around the perimeter
+        this.rotationAngle += this.rotationSpeed;
+        if (this.rotationAngle > Math.PI * 2) {
+            this.rotationAngle -= Math.PI * 2;
+        }
+
+        // Calculate perimeter total length
+        const perimeterLength = (CANVAS_WIDTH + CANVAS_HEIGHT) * 2;
+        const distanceAlongPerimeter = (this.rotationAngle / (Math.PI * 2)) * perimeterLength;
+
+        // Map distance to actual position on perimeter
+        if (distanceAlongPerimeter < CANVAS_WIDTH) {
+            // Top edge, moving right
+            this.circleX = distanceAlongPerimeter;
+            this.circleY = 0;
+            this.side = 'top';
+        } else if (distanceAlongPerimeter < CANVAS_WIDTH + CANVAS_HEIGHT) {
+            // Right edge, moving down
+            this.circleX = CANVAS_WIDTH;
+            this.circleY = distanceAlongPerimeter - CANVAS_WIDTH;
+            this.side = 'right';
+        } else if (distanceAlongPerimeter < CANVAS_WIDTH * 2 + CANVAS_HEIGHT) {
+            // Bottom edge, moving left
+            this.circleX = CANVAS_WIDTH - (distanceAlongPerimeter - CANVAS_WIDTH - CANVAS_HEIGHT);
+            this.circleY = CANVAS_HEIGHT;
+            this.side = 'bottom';
+        } else {
+            // Left edge, moving up
+            this.circleX = 0;
+            this.circleY = CANVAS_HEIGHT - (distanceAlongPerimeter - CANVAS_WIDTH * 2 - CANVAS_HEIGHT);
+            this.side = 'left';
+        }
+
+        // Calculate laser beam endpoints from circle
+        switch(this.side) {
             case 'top':
-                this.x1 = Math.random() * CANVAS_WIDTH;
-                this.y1 = 0;
-                this.x2 = this.x1;
+                this.x1 = this.circleX;
+                this.y1 = this.circleY;
+                this.x2 = this.circleX;
                 this.y2 = CANVAS_HEIGHT;
                 break;
             case 'bottom':
-                this.x1 = Math.random() * CANVAS_WIDTH;
-                this.y1 = CANVAS_HEIGHT;
-                this.x2 = this.x1;
+                this.x1 = this.circleX;
+                this.y1 = this.circleY;
+                this.x2 = this.circleX;
                 this.y2 = 0;
                 break;
             case 'left':
-                this.x1 = 0;
-                this.y1 = Math.random() * CANVAS_HEIGHT;
+                this.x1 = this.circleX;
+                this.y1 = this.circleY;
                 this.x2 = CANVAS_WIDTH;
-                this.y2 = this.y1;
+                this.y2 = this.circleY;
                 break;
             case 'right':
-                this.x1 = CANVAS_WIDTH;
-                this.y1 = Math.random() * CANVAS_HEIGHT;
+                this.x1 = this.circleX;
+                this.y1 = this.circleY;
                 this.x2 = 0;
-                this.y2 = this.y1;
+                this.y2 = this.circleY;
                 break;
         }
     }
@@ -864,6 +908,11 @@ class LaserBeam {
     update(deltaTime) {
         this.age += deltaTime;
         this.justFired = false;
+
+        // Continuously update circle position while charging
+        if (this.state === 'charging') {
+            this.updateCirclePosition();
+        }
 
         if (this.state === 'charging' && this.age >= this.chargeTime) {
             this.state = 'firing';
@@ -937,28 +986,53 @@ class LaserBeam {
 
     draw(ctx) {
         if (this.state === 'charging') {
-            // Draw charging indicator
-            const alpha = (this.age / this.chargeTime) * 0.7;
-            ctx.save();
-            ctx.globalAlpha = alpha;
-            ctx.strokeStyle = this.color;
-            ctx.lineWidth = this.width;
-            ctx.setLineDash([10, 10]);
-            ctx.beginPath();
-            ctx.moveTo(this.x1, this.y1);
-            ctx.lineTo(this.x2, this.y2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.restore();
+            // Draw rotating red circle on edge
+            const chargeProgress = this.age / this.chargeTime;
 
-            // Draw charging glow at origin
             ctx.save();
-            ctx.shadowBlur = 30;
-            ctx.shadowColor = this.color;
+
+            // Draw circle body
             ctx.fillStyle = this.color;
+            ctx.shadowBlur = 20 + chargeProgress * 30; // Glow intensifies as it charges
+            ctx.shadowColor = this.color;
             ctx.beginPath();
-            ctx.arc(this.x1, this.y1, 10, 0, Math.PI * 2);
+            ctx.arc(this.circleX, this.circleY, this.circleRadius, 0, Math.PI * 2);
             ctx.fill();
+
+            // Draw charging ring that fills up over 4 seconds
+            const ringRadius = this.circleRadius + 5;
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(this.circleX, this.circleY, ringRadius, -Math.PI / 2, -Math.PI / 2 + chargeProgress * Math.PI * 2);
+            ctx.stroke();
+
+            // Draw pulsing energy waves as it charges
+            if (chargeProgress > 0.25) {
+                const pulseRadius = this.circleRadius + (chargeProgress * 20);
+                ctx.globalAlpha = 0.5 * (1 - chargeProgress);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.circleX, this.circleY, pulseRadius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Draw warning line toward center when nearly charged (last second)
+            if (chargeProgress > 0.75) {
+                const warningAlpha = (chargeProgress - 0.75) / 0.25; // 0 to 1 over last 25%
+                ctx.globalAlpha = warningAlpha * 0.5;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(this.x1, this.y1);
+                ctx.lineTo(this.x2, this.y2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
             ctx.restore();
         } else if (this.state === 'firing') {
             // Draw afterimages (trail effect)
