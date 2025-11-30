@@ -1134,6 +1134,10 @@ class Hypercube {
 
     update(deltaTime) {
         this.rotation += this.rotationSpeed;
+        // Keep rotation bounded to prevent numerical issues
+        if (this.rotation > Math.PI * 2) {
+            this.rotation -= Math.PI * 2;
+        }
         this.shapeTimer += deltaTime;
         this.laserTimer += deltaTime;
         this.dashTimer += deltaTime;
@@ -2039,12 +2043,22 @@ class Game {
         this.activePowerups = new Map();
         this.boss = null;
         this.bossMode = false;
+        this.waitingToSpawnBoss = false;
         this.floatingTexts = [];
         this.particles = [];
         this.laserBeams = []; // For Track 2 lasers
         this.blackHole = null; // Black hole effect during shape swap
         this.screenFlashAlpha = 0; // Screen flash effect for laser fire
         this.levelUpGlowAlpha = 0; // Screen glow on level up
+
+        // Ultimate ability system
+        this.ultimateCharge = 0; // 0-100%
+        this.ultimateChargeRate = 1; // Base charge per second
+        this.ultimateOverdrive = false; // Doubles charge speed
+        this.ultimateOverdriveTimer = 0;
+        this.ultimateOverdriveDuration = 3000; // 3 seconds
+        this.ultimateActive = false;
+        this.ultimateTargets = []; // Targets for precision strike
 
         // Initialize sound system
         this.soundSystem = new SoundSystem();
@@ -2098,11 +2112,23 @@ class Game {
 
         // Mouse button tracking for fine-tune rotation control
         this.canvas.addEventListener('mousedown', (e) => {
-            this.mousePressed = true;
+            if (e.button === 0) { // Left click
+                this.mousePressed = true;
+            } else if (e.button === 2) { // Right click
+                e.preventDefault();
+                this.triggerUltimate();
+            }
         });
 
         this.canvas.addEventListener('mouseup', (e) => {
-            this.mousePressed = false;
+            if (e.button === 0) { // Left click
+                this.mousePressed = false;
+            }
+        });
+
+        // Prevent context menu on right-click
+        this.canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
         });
 
         // Also handle mouse leaving canvas
@@ -2165,8 +2191,16 @@ class Game {
         this.shapeSpawnTimers = [];
         this.bossMode = false;
         this.boss = null;
+        this.waitingToSpawnBoss = false;
         this.laserBeams = [];
         this.laserSpawnTimer = 0;
+
+        // Reset ultimate ability
+        this.ultimateCharge = 0;
+        this.ultimateOverdrive = false;
+        this.ultimateOverdriveTimer = 0;
+        this.ultimateActive = false;
+        this.ultimateTargets = [];
 
         // Reset to Track 1
         this.currentTrack = 1;
@@ -2402,6 +2436,11 @@ class Game {
             }
         }
 
+        // Check if waiting to spawn boss and balls have cleared center
+        if (this.waitingToSpawnBoss && !this.bossMode) {
+            this.spawnBoss();
+        }
+
         // Update screen flash (fade out)
         if (this.screenFlashAlpha > 0) {
             this.screenFlashAlpha -= deltaTime * 0.008; // Fade out over ~200ms
@@ -2412,6 +2451,29 @@ class Game {
         if (this.levelUpGlowAlpha > 0) {
             this.levelUpGlowAlpha -= deltaTime * 0.003; // Fade out over ~500ms
             if (this.levelUpGlowAlpha < 0) this.levelUpGlowAlpha = 0;
+        }
+
+        // Update ultimate charge (BPM-based with difficulty modifier)
+        if (this.ultimateCharge < 100 && !this.ultimateActive) {
+            // Base charge rate affected by BPM (higher BPM = faster charge)
+            const bpmModifier = this.currentBPM / 120; // 120 is baseline
+            // Difficulty affects charge rate (easy = 1.3x, normal = 1x, hard = 0.7x)
+            const difficultyModifier = this.difficulty === 1 ? 1.3 : (this.difficulty === 2 ? 1 : 0.7);
+            // Overdrive doubles charge speed
+            const overdriveModifier = this.ultimateOverdrive ? 2 : 1;
+
+            const chargeRate = this.ultimateChargeRate * bpmModifier * difficultyModifier * overdriveModifier;
+            this.ultimateCharge += chargeRate * (deltaTime / 1000); // Charge per second
+            if (this.ultimateCharge > 100) this.ultimateCharge = 100;
+        }
+
+        // Update overdrive timer
+        if (this.ultimateOverdrive) {
+            this.ultimateOverdriveTimer += deltaTime;
+            if (this.ultimateOverdriveTimer >= this.ultimateOverdriveDuration) {
+                this.ultimateOverdrive = false;
+                this.ultimateOverdriveTimer = 0;
+            }
         }
 
         // Update black hole effect
@@ -2607,6 +2669,10 @@ class Game {
 
                         this.blocks.splice(j, 1);
 
+                        // Activate overdrive on block break
+                        this.ultimateOverdrive = true;
+                        this.ultimateOverdriveTimer = 0;
+
                         // Level progression when all blocks destroyed
                         if (this.blocks.length === 0 && !this.bossMode) {
                             this.levelUp();
@@ -2776,6 +2842,10 @@ class Game {
                         }
 
                         this.blocks.splice(i, 1);
+
+                        // Activate overdrive on block break
+                        this.ultimateOverdrive = true;
+                        this.ultimateOverdriveTimer = 0;
 
                         // Play sound
                         this.soundSystem.blockBreak();
@@ -3050,7 +3120,139 @@ class Game {
         this.updateUI();
     }
 
+    triggerUltimate() {
+        // Only trigger if playing, not already active, and fully charged
+        if (this.state !== 'playing' || this.ultimateActive || this.ultimateCharge < 100) {
+            return;
+        }
+
+        // Activate ultimate
+        this.ultimateActive = true;
+        this.ultimateCharge = 0;
+
+        // Find up to 5 nearest blocks (or boss if present)
+        this.ultimateTargets = [];
+
+        if (this.bossMode && this.boss) {
+            // Target boss multiple times for chain effect
+            for (let i = 0; i < 5; i++) {
+                this.ultimateTargets.push({ type: 'boss', target: this.boss });
+            }
+        } else {
+            // Find nearest blocks
+            const blocks = [...this.blocks];
+            blocks.sort((a, b) => {
+                const distA = Math.sqrt((a.x - CANVAS_WIDTH/2)**2 + (a.y - CANVAS_HEIGHT/2)**2);
+                const distB = Math.sqrt((b.x - CANVAS_WIDTH/2)**2 + (b.y - CANVAS_HEIGHT/2)**2);
+                return distA - distB;
+            });
+
+            for (let i = 0; i < Math.min(5, blocks.length); i++) {
+                this.ultimateTargets.push({ type: 'block', target: blocks[i] });
+            }
+        }
+
+        // Execute precision strikes on targets
+        this.executeUltimateStrikes();
+
+        // Visual feedback
+        this.floatingTexts.push(new FloatingText(
+            CANVAS_WIDTH / 2,
+            CANVAS_HEIGHT / 2,
+            'ULTIMATE!',
+            COLORS.yellow
+        ));
+
+        // Sound effect
+        this.soundSystem.playNote(880, 0.3, 'square'); // High pitched strike sound
+    }
+
+    executeUltimateStrikes() {
+        // Execute strikes with slight delay between each
+        this.ultimateTargets.forEach((target, index) => {
+            setTimeout(() => {
+                if (target.type === 'boss' && this.boss) {
+                    // Damage boss
+                    this.boss.takeDamage(2, this.soundSystem);
+
+                    // Lightning effect from center to boss
+                    this.createLightningEffect(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, this.boss.x, this.boss.y);
+
+                    if (this.boss.defeated) {
+                        this.score += 1000 * this.difficulty;
+                        this.endGame(true);
+                    }
+                } else if (target.type === 'block' && this.blocks.includes(target.target)) {
+                    const block = target.target;
+
+                    // Lightning effect from center to block
+                    this.createLightningEffect(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, block.x, block.y);
+
+                    // Damage block
+                    block.hp--;
+                    if (block.hp <= 0) {
+                        const points = 10 * this.difficulty;
+                        this.score += points;
+                        this.floatingTexts.push(new FloatingText(block.x, block.y, '+' + points, COLORS.cyan));
+                        this.blocks.splice(this.blocks.indexOf(block), 1);
+                        this.soundSystem.playNote(440 + Math.random() * 200, 0.15, 'square');
+
+                        // Particles
+                        for (let i = 0; i < 8; i++) {
+                            this.particles.push(new Particle(block.x, block.y, block.color));
+                        }
+                    }
+                }
+            }, index * 100); // 100ms between strikes
+        });
+
+        // Clear targets after all strikes
+        setTimeout(() => {
+            this.ultimateTargets = [];
+            this.ultimateActive = false;
+        }, this.ultimateTargets.length * 100 + 100);
+    }
+
+    createLightningEffect(x1, y1, x2, y2) {
+        // Create lightning particles along the path
+        const steps = 10;
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const x = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 20;
+            const y = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 20;
+
+            const particle = new Particle(x, y, COLORS.yellow);
+            particle.lifetime = 200;
+            this.particles.push(particle);
+        }
+    }
+
     spawnBoss() {
+        // Check if any ball is in the center area (within 200px of boss spawn)
+        const bossSpawnX = CANVAS_WIDTH / 2;
+        const bossSpawnY = CANVAS_HEIGHT / 2;
+        const safeDistance = 200;
+
+        for (let ball of this.balls) {
+            const dx = ball.x - bossSpawnX;
+            const dy = ball.y - bossSpawnY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < safeDistance) {
+                // Ball is too close, wait to spawn
+                this.waitingToSpawnBoss = true;
+                this.floatingTexts.push(new FloatingText(
+                    CANVAS_WIDTH / 2,
+                    CANVAS_HEIGHT / 2 - 50,
+                    'HYPERCUBE APPROACHING...',
+                    COLORS.yellow
+                ));
+                return;
+            }
+        }
+
+        // Safe to spawn boss
+        this.waitingToSpawnBoss = false;
         this.bossMode = true;
         this.boss = new Hypercube();
         this.blocks = [];
@@ -3251,6 +3453,86 @@ class Game {
             this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             this.ctx.restore();
         }
+
+        // Draw ultimate charge indicator (donut graph)
+        this.drawUltimateCharge();
+    }
+
+    drawUltimateCharge() {
+        const ctx = this.ctx;
+        const centerX = CANVAS_WIDTH / 2;
+        const centerY = CANVAS_HEIGHT - 40; // Bottom of screen
+        const outerRadius = 30;
+        const innerRadius = 20;
+        const lineCount = 36; // Number of lines in the donut
+        const chargePercent = this.ultimateCharge / 100;
+
+        ctx.save();
+
+        // Draw background donut (empty state)
+        for (let i = 0; i < lineCount; i++) {
+            const angle = (Math.PI * 2 * i) / lineCount - Math.PI / 2; // Start from top
+            const x1 = centerX + Math.cos(angle) * innerRadius;
+            const y1 = centerY + Math.sin(angle) * innerRadius;
+            const x2 = centerX + Math.cos(angle) * outerRadius;
+            const y2 = centerY + Math.sin(angle) * outerRadius;
+
+            ctx.strokeStyle = '#222'; // Dark background
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        // Draw charged portion
+        const chargedLines = Math.floor(lineCount * chargePercent);
+        for (let i = 0; i < chargedLines; i++) {
+            const angle = (Math.PI * 2 * i) / lineCount - Math.PI / 2;
+            const x1 = centerX + Math.cos(angle) * innerRadius;
+            const y1 = centerY + Math.sin(angle) * innerRadius;
+            const x2 = centerX + Math.cos(angle) * outerRadius;
+            const y2 = centerY + Math.sin(angle) * outerRadius;
+
+            // Color changes based on overdrive state
+            const color = this.ultimateOverdrive ? COLORS.yellow : COLORS.cyan;
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = color;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        // Draw center text
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px Orbitron';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        if (this.ultimateCharge >= 100) {
+            ctx.fillStyle = COLORS.yellow;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = COLORS.yellow;
+            ctx.fillText('ULT', centerX, centerY);
+        } else {
+            ctx.fillText(Math.floor(this.ultimateCharge) + '%', centerX, centerY);
+        }
+
+        // Draw "OVERDRIVE" text if active
+        if (this.ultimateOverdrive) {
+            ctx.fillStyle = COLORS.yellow;
+            ctx.font = '8px Orbitron';
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = COLORS.yellow;
+            ctx.fillText('OVERDRIVE', centerX, centerY + 20);
+        }
+
+        ctx.restore();
     }
 
     updateUI() {
