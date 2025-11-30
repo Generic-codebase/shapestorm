@@ -1122,8 +1122,10 @@ class Hypercube {
         this.isDashing = false;
         this.dashDuration = 200; // Dash lasts 200ms
         this.dashSpeed = 0;
-        this.dashVelocityX = 0;
-        this.dashVelocityY = 0;
+        this.dashStartX = 0; // Starting position
+        this.dashStartY = 0;
+        this.dashTargetX = 0; // Target position
+        this.dashTargetY = 0;
 
         // Colors cycle through spectrum
         this.colorPhase = 0;
@@ -1143,12 +1145,22 @@ class Hypercube {
             this.isDashing = true;
             this.dashSpeed = 0;
 
+            // Store starting position
+            this.dashStartX = this.x;
+            this.dashStartY = this.y;
+
             // Random direction for erratic movement
             const angle = Math.random() * Math.PI * 2;
             const dashDistance = 100 + Math.random() * 150; // 100-250 pixels
 
-            this.dashVelocityX = Math.cos(angle) * dashDistance;
-            this.dashVelocityY = Math.sin(angle) * dashDistance;
+            // Calculate target position from current position
+            const targetX = this.x + Math.cos(angle) * dashDistance;
+            const targetY = this.y + Math.sin(angle) * dashDistance;
+
+            // Clamp to canvas bounds with margin
+            const margin = 100;
+            this.dashTargetX = Math.max(margin, Math.min(CANVAS_WIDTH - margin, targetX));
+            this.dashTargetY = Math.max(margin, Math.min(CANVAS_HEIGHT - margin, targetY));
         }
 
         // Execute dash
@@ -1160,17 +1172,13 @@ class Hypercube {
                 const progress = this.dashSpeed / this.dashDuration;
                 const easing = 1 - Math.pow(1 - progress, 3); // Ease-out cubic
 
-                const targetX = CANVAS_WIDTH / 2 + this.dashVelocityX;
-                const targetY = CANVAS_HEIGHT / 2 + this.dashVelocityY;
-
-                // Clamp to canvas bounds with margin
-                const margin = 100;
-                const clampedX = Math.max(margin, Math.min(CANVAS_WIDTH - margin, targetX));
-                const clampedY = Math.max(margin, Math.min(CANVAS_HEIGHT - margin, targetY));
-
-                this.x = CANVAS_WIDTH / 2 + (clampedX - CANVAS_WIDTH / 2) * easing;
-                this.y = CANVAS_HEIGHT / 2 + (clampedY - CANVAS_HEIGHT / 2) * easing;
+                // Interpolate from start to target
+                this.x = this.dashStartX + (this.dashTargetX - this.dashStartX) * easing;
+                this.y = this.dashStartY + (this.dashTargetY - this.dashStartY) * easing;
             } else {
+                // Dash complete - snap to target
+                this.x = this.dashTargetX;
+                this.y = this.dashTargetY;
                 this.isDashing = false;
             }
         }
@@ -1908,6 +1916,102 @@ class MenuBackground {
 }
 
 // ============================================================================
+// PAUSE BACKGROUND
+// ============================================================================
+
+class PauseBackground {
+    constructor() {
+        this.canvas = document.getElementById('pause-background');
+        this.ctx = this.canvas.getContext('2d');
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+
+        // Matrix code rain
+        this.matrixRain = new MatrixRain(this.canvas);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            this.canvas.width = window.innerWidth;
+            this.canvas.height = window.innerHeight;
+            this.matrixRain.resize(this.canvas.width, this.canvas.height);
+        });
+    }
+
+    update(deltaTime) {
+        // Cyan color for pause screen
+        this.matrixRain.setColor(COLORS.cyan);
+        this.matrixRain.update(deltaTime);
+    }
+
+    draw() {
+        const ctx = this.ctx;
+
+        // Clear canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw matrix code rain
+        this.matrixRain.draw();
+    }
+
+    show() {
+        this.canvas.classList.add('active');
+    }
+
+    hide() {
+        this.canvas.classList.remove('active');
+    }
+}
+
+// ============================================================================
+// GAMEOVER BACKGROUND
+// ============================================================================
+
+class GameoverBackground {
+    constructor() {
+        this.canvas = document.getElementById('gameover-background');
+        this.ctx = this.canvas.getContext('2d');
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+
+        // Matrix code rain
+        this.matrixRain = new MatrixRain(this.canvas);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            this.canvas.width = window.innerWidth;
+            this.canvas.height = window.innerHeight;
+            this.matrixRain.resize(this.canvas.width, this.canvas.height);
+        });
+    }
+
+    update(deltaTime) {
+        // Magenta color for gameover screen
+        this.matrixRain.setColor(COLORS.magenta);
+        this.matrixRain.update(deltaTime);
+    }
+
+    draw() {
+        const ctx = this.ctx;
+
+        // Clear canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw matrix code rain
+        this.matrixRain.draw();
+    }
+
+    show() {
+        this.canvas.classList.add('active');
+    }
+
+    hide() {
+        this.canvas.classList.remove('active');
+    }
+}
+
+// ============================================================================
 // GAME STATE
 // ============================================================================
 
@@ -1950,7 +2054,13 @@ class Game {
         this.menuBackground = new MenuBackground();
         this.menuBackground.show();
 
-        // Initialize matrix code rain for gameplay
+        // Initialize pause background
+        this.pauseBackground = new PauseBackground();
+
+        // Initialize gameover background
+        this.gameoverBackground = new GameoverBackground();
+
+        // Initialize matrix code rain for gameplay (removed from gameplay)
         this.matrixRain = new MatrixRain(this.canvas);
 
         this.mouseX = 0;
@@ -2102,6 +2212,8 @@ class Game {
         this.menuBackground.matrixRain.trigger();
 
         this.menuBackground.hide();
+        this.pauseBackground.hide();
+        this.gameoverBackground.hide();
 
         this.updateUI();
     }
@@ -2206,9 +2318,6 @@ class Game {
 
         this.lastShapeSwap = now;
         this.updateShapePool();
-
-        // Trigger matrix rain glow on shape swap
-        this.matrixRain.trigger();
     }
 
     generateBlocks() {
@@ -2247,6 +2356,18 @@ class Game {
         // Update menu background when in menu state
         if (this.state === 'menu') {
             this.menuBackground.update(deltaTime);
+            return;
+        }
+
+        // Update pause background when paused
+        if (this.state === 'paused') {
+            this.pauseBackground.update(deltaTime);
+            return;
+        }
+
+        // Update gameover background when game over
+        if (this.state === 'gameover') {
+            this.gameoverBackground.update(deltaTime);
             return;
         }
 
@@ -2292,17 +2413,6 @@ class Game {
             this.levelUpGlowAlpha -= deltaTime * 0.003; // Fade out over ~500ms
             if (this.levelUpGlowAlpha < 0) this.levelUpGlowAlpha = 0;
         }
-
-        // Update matrix rain with powerup-based colors
-        let rainColor = COLORS.cyan; // Default
-        if (this.activePowerups.has('power')) rainColor = COLORS.yellow;
-        else if (this.activePowerups.has('shield')) rainColor = COLORS.green;
-        else if (this.activePowerups.has('storm')) rainColor = COLORS.purple;
-        else if (this.activePowerups.has('regen')) rainColor = COLORS.magenta;
-        else if (this.activePowerups.has('multiply')) rainColor = COLORS.orange;
-
-        this.matrixRain.setColor(rainColor);
-        this.matrixRain.update(deltaTime);
 
         // Update black hole effect
         if (this.blackHole) {
@@ -2937,9 +3047,6 @@ class Game {
         // Trigger level up glow effect
         this.levelUpGlowAlpha = 0.25;
 
-        // Trigger matrix rain glow
-        this.matrixRain.trigger();
-
         this.updateUI();
     }
 
@@ -2985,6 +3092,7 @@ class Game {
 
         document.getElementById('final-score').textContent = this.score;
         document.getElementById('gameover-overlay').classList.add('active');
+        this.gameoverBackground.show();
         this.updateUI();
     }
 
@@ -3015,6 +3123,7 @@ class Game {
         const currentTrack = this.tracks[this.currentTrack];
         if (currentTrack) currentTrack.pause();
         document.getElementById('pause-overlay').classList.add('active');
+        this.pauseBackground.show();
     }
 
     resumeGame() {
@@ -3024,6 +3133,7 @@ class Game {
             currentTrack.play().catch(e => console.log('Audio resume failed:', e));
         }
         document.getElementById('pause-overlay').classList.remove('active');
+        this.pauseBackground.hide();
     }
 
     showMenu() {
@@ -3045,6 +3155,8 @@ class Game {
         document.getElementById('menu-overlay').classList.add('active');
         document.getElementById('pause-overlay').classList.remove('active');
         document.getElementById('gameover-overlay').classList.remove('active');
+        this.pauseBackground.hide();
+        this.gameoverBackground.hide();
         this.menuBackground.show();
         this.updateUI();
     }
@@ -3056,12 +3168,19 @@ class Game {
             return;
         }
 
+        // Draw pause background when paused
+        if (this.state === 'paused') {
+            this.pauseBackground.draw();
+        }
+
+        // Draw gameover background when game over
+        if (this.state === 'gameover') {
+            this.gameoverBackground.draw();
+        }
+
         // Clear canvas
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-        // Draw matrix code rain (in background)
-        this.matrixRain.draw();
 
         // Draw next shape preview (behind main shape) - shows upcoming shape from pool
         const centerX = CANVAS_WIDTH / 2;
