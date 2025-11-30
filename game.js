@@ -1116,6 +1116,15 @@ class Hypercube {
         this.laserInterval = 1500; // Fire laser every 1.5 seconds
         this.lasers = [];
 
+        // Dash movement
+        this.dashTimer = 0;
+        this.dashInterval = 4000; // Dash every 4 seconds
+        this.isDashing = false;
+        this.dashDuration = 200; // Dash lasts 200ms
+        this.dashSpeed = 0;
+        this.dashVelocityX = 0;
+        this.dashVelocityY = 0;
+
         // Colors cycle through spectrum
         this.colorPhase = 0;
         this.colors = [COLORS.red, COLORS.magenta, COLORS.purple, COLORS.cyan, COLORS.yellow];
@@ -1125,7 +1134,46 @@ class Hypercube {
         this.rotation += this.rotationSpeed;
         this.shapeTimer += deltaTime;
         this.laserTimer += deltaTime;
+        this.dashTimer += deltaTime;
         this.colorPhase = (this.colorPhase + 0.01) % this.colors.length;
+
+        // Dash movement - erratic dashes every 4 seconds
+        if (!this.isDashing && this.dashTimer >= this.dashInterval) {
+            this.dashTimer = 0;
+            this.isDashing = true;
+            this.dashSpeed = 0;
+
+            // Random direction for erratic movement
+            const angle = Math.random() * Math.PI * 2;
+            const dashDistance = 100 + Math.random() * 150; // 100-250 pixels
+
+            this.dashVelocityX = Math.cos(angle) * dashDistance;
+            this.dashVelocityY = Math.sin(angle) * dashDistance;
+        }
+
+        // Execute dash
+        if (this.isDashing) {
+            this.dashSpeed += deltaTime;
+
+            if (this.dashSpeed < this.dashDuration) {
+                // Smooth dash with easing
+                const progress = this.dashSpeed / this.dashDuration;
+                const easing = 1 - Math.pow(1 - progress, 3); // Ease-out cubic
+
+                const targetX = CANVAS_WIDTH / 2 + this.dashVelocityX;
+                const targetY = CANVAS_HEIGHT / 2 + this.dashVelocityY;
+
+                // Clamp to canvas bounds with margin
+                const margin = 100;
+                const clampedX = Math.max(margin, Math.min(CANVAS_WIDTH - margin, targetX));
+                const clampedY = Math.max(margin, Math.min(CANVAS_HEIGHT - margin, targetY));
+
+                this.x = CANVAS_WIDTH / 2 + (clampedX - CANVAS_WIDTH / 2) * easing;
+                this.y = CANVAS_HEIGHT / 2 + (clampedY - CANVAS_HEIGHT / 2) * easing;
+            } else {
+                this.isDashing = false;
+            }
+        }
 
         // Morph to next shape
         if (this.shapeTimer >= this.shapeInterval) {
@@ -1409,8 +1457,8 @@ class MatrixRain {
         this.glowIntensity = 0;
         this.baseColor = COLORS.cyan;
 
-        // Characters: mix of musical notes and Matrix-style symbols
-        this.chars = '♪♫♬♭♮♯ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()';
+        // Characters: mix of musical notes, Greek letters, and Matrix-style symbols
+        this.chars = '♪♫♬♭♮♯ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()';
 
         // Initialize drops
         for (let i = 0; i < this.columns; i++) {
