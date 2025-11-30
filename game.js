@@ -2870,11 +2870,15 @@ class Game {
     }
 
     updateUI() {
-        document.getElementById('score').textContent = Math.floor(this.score);
+        // Cap score display at 999999 for UI stability
+        const displayScore = Math.min(Math.floor(this.score), 999999);
+        const displayHighScore = Math.min(this.highScore, 999999);
+
+        document.getElementById('score').textContent = displayScore;
         document.getElementById('lives').textContent = this.lives;
         document.getElementById('level').textContent = this.level;
         document.getElementById('difficulty').textContent = this.difficulty.toFixed(1) + 'x';
-        document.getElementById('high-score').textContent = this.highScore;
+        document.getElementById('high-score').textContent = displayHighScore;
 
         this.updateShapePool();
         this.updatePowerupsDisplay();
@@ -2896,14 +2900,14 @@ class Game {
         // Function to create SVG line art for shapes
         const createShapeSVG = (shapeType) => {
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', '30');
-            svg.setAttribute('height', '30');
-            svg.setAttribute('viewBox', '0 0 30 30');
+            svg.setAttribute('width', '42');
+            svg.setAttribute('height', '42');
+            svg.setAttribute('viewBox', '0 0 42 42');
 
             const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             polygon.setAttribute('fill', 'none');
             polygon.setAttribute('stroke', 'currentColor');
-            polygon.setAttribute('stroke-width', '1.5');
+            polygon.setAttribute('stroke-width', '2');
 
             // Generate polygon points based on shape type
             const sides = {
@@ -2915,9 +2919,9 @@ class Game {
             }[shapeType] || 4;
 
             const points = [];
-            const radius = 12;
-            const centerX = 15;
-            const centerY = 15;
+            const radius = 17;
+            const centerX = 21;
+            const centerY = 21;
 
             for (let i = 0; i < sides; i++) {
                 const angle = (Math.PI * 2 * i) / sides - Math.PI / 2;
@@ -2931,10 +2935,10 @@ class Game {
 
             // Add text label (first 3 letters)
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            text.setAttribute('x', '15');
-            text.setAttribute('y', '17');
+            text.setAttribute('x', '21');
+            text.setAttribute('y', '24');
             text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('font-size', '6');
+            text.setAttribute('font-size', '8');
             text.setAttribute('fill', 'currentColor');
             text.setAttribute('font-weight', 'bold');
             text.textContent = shapeNames[shapeType] || 'SHP';

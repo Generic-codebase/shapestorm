@@ -78,15 +78,30 @@ body {
 #score-display, #lives-display, #level-display, #difficulty-display {
     background: linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(20, 0, 40, 0.8) 100%);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    padding: 8px 16px;
+    padding: 12px 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 90px;
-    height: 50px;
+    height: 70px;
     position: relative;
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+#score-display {
+    width: 180px; /* Fixed width to accommodate 999999 */
+}
+
+#lives-display {
+    width: 110px; /* Fixed width for lives */
+}
+
+#level-display {
+    width: 110px; /* Fixed width for level */
+}
+
+#difficulty-display {
+    width: 130px; /* Fixed width for difficulty */
 }
 
 #score-display::before, #lives-display::before, #level-display::before, #difficulty-display::before {
@@ -100,7 +115,7 @@ body {
     opacity: 0.3;
     z-index: -1;
     animation: shimmer 3s linear infinite;
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
 
 @keyframes shimmer {
@@ -121,15 +136,16 @@ body {
 }
 
 .label {
-    font-size: 12px;
+    font-size: 14px;
     color: #aaa;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
+    font-weight: 400;
 }
 
 #score, #lives, #level, #difficulty {
-    font-size: 24px;
+    font-size: 32px;
     font-weight: 700;
-    text-shadow: 0 0 10px currentColor;
+    text-shadow: 0 0 15px currentColor;
 }
 
 #score {
@@ -152,14 +168,13 @@ body {
 #powerups-bar {
     background: linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 40, 20, 0.8) 100%);
     border: 1px solid rgba(0, 255, 0, 0.3);
-    padding: 8px 16px;
-    min-width: 200px;
-    max-width: 300px;
-    height: 50px;
+    padding: 12px 20px;
+    width: 400px; /* Fixed width to prevent shifting */
+    height: 70px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
     position: relative;
 }
 
@@ -174,31 +189,34 @@ body {
     opacity: 0.3;
     z-index: -1;
     animation: shimmer 3s linear infinite;
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
 
 #powerups-bar .label {
     color: #0f0;
-    margin-bottom: 8px;
-    font-size: 10px;
+    margin-bottom: 10px;
+    font-size: 14px;
     text-align: center;
+    font-weight: 400;
 }
 
 #active-powerups {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
     justify-content: center;
+    min-height: 28px; /* Reserve space even when empty */
 }
 
 .powerup-indicator {
     background: rgba(0, 255, 0, 0.2);
     border: 1px solid #0f0;
-    padding: 4px 8px;
-    font-size: 9px;
-    border-radius: 2px;
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 3px;
     animation: pulse 1s infinite;
-    text-shadow: 0 0 5px #0f0;
+    text-shadow: 0 0 8px #0f0;
+    font-weight: 600;
 }
 
 @keyframes pulse {
@@ -210,13 +228,13 @@ body {
 #shape-pool {
     background: linear-gradient(135deg, rgba(0, 0, 0, 0.8) 0%, rgba(40, 0, 40, 0.8) 100%);
     border: 1px solid rgba(255, 0, 255, 0.3);
-    padding: 8px 16px;
-    min-width: 200px;
-    height: 50px;
+    padding: 12px 20px;
+    width: 500px; /* Fixed width for 8 shapes */
+    height: 70px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
     position: relative;
 }
 
@@ -231,33 +249,34 @@ body {
     opacity: 0.3;
     z-index: -1;
     animation: shimmer 3s linear infinite;
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
 
 #shape-pool .label {
     color: #f0f;
-    margin-bottom: 8px;
-    font-size: 10px;
+    margin-bottom: 10px;
+    font-size: 14px;
     text-align: center;
+    font-weight: 400;
 }
 
 #pool-shapes {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     justify-content: center;
 }
 
 .pool-shape {
-    width: 36px;
-    height: 36px;
-    border: 1px solid rgba(0, 255, 255, 0.4);
+    width: 46px;
+    height: 46px;
+    border: 1.5px solid rgba(0, 255, 255, 0.4);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 9px;
+    font-size: 11px;
     background: rgba(0, 255, 255, 0.1);
     position: relative;
-    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
 }
 
 .pool-shape.spawning::after {
@@ -280,6 +299,7 @@ body {
 .pool-shape.ready {
     animation: shapeReady 0.5s ease-in-out infinite;
     border-color: rgba(255, 255, 0, 0.8);
+    border-width: 2px;
 }
 
 @keyframes shapeReady {
@@ -288,7 +308,7 @@ body {
         border-color: rgba(255, 255, 0, 0.8);
     }
     50% {
-        transform: scale(1.1);
+        transform: scale(1.08);
         border-color: rgba(255, 136, 0, 0.9);
     }
 }
