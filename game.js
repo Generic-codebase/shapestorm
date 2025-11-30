@@ -2700,6 +2700,20 @@ class Game {
             'HYPERCUBE APPROACHING',
             COLORS.red
         ));
+
+        // Ensure ball is moving when boss spawns
+        if (this.balls.length > 0) {
+            const ball = this.balls[0];
+            const speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
+
+            // If ball is stationary or very slow, give it velocity
+            if (speed < 0.5) {
+                const angle = Math.random() * Math.PI * 2;
+                const ballSpeed = BASE_BALL_SPEED * this.difficulty;
+                ball.vx = Math.cos(angle) * ballSpeed;
+                ball.vy = Math.sin(angle) * ballSpeed;
+            }
+        }
     }
 
     endGame(victory) {
