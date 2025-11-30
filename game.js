@@ -1397,6 +1397,158 @@ class Hypercube {
 }
 
 // ============================================================================
+// MATRIX CODE RAIN
+// ============================================================================
+
+class MatrixRain {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.columns = Math.floor(canvas.width / 20);
+        this.drops = [];
+        this.glowIntensity = 0;
+        this.baseColor = COLORS.cyan;
+
+        // Characters: mix of musical notes and Matrix-style symbols
+        this.chars = '♪♫♬♭♮♯ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()';
+
+        // Initialize drops
+        for (let i = 0; i < this.columns; i++) {
+            this.drops[i] = {
+                y: Math.random() * -100,
+                speed: 0.3 + Math.random() * 0.7,
+                chars: [],
+                brightness: 0.3 + Math.random() * 0.7
+            };
+
+            // Each drop has a trail of characters
+            for (let j = 0; j < 20; j++) {
+                this.drops[i].chars.push(this.chars[Math.floor(Math.random() * this.chars.length)]);
+            }
+        }
+    }
+
+    resize(width, height) {
+        this.columns = Math.floor(width / 20);
+
+        // Adjust drops array
+        if (this.drops.length > this.columns) {
+            this.drops = this.drops.slice(0, this.columns);
+        } else {
+            while (this.drops.length < this.columns) {
+                this.drops.push({
+                    y: Math.random() * -100,
+                    speed: 0.3 + Math.random() * 0.7,
+                    chars: [],
+                    brightness: 0.3 + Math.random() * 0.7
+                });
+
+                const dropIndex = this.drops.length - 1;
+                for (let j = 0; j < 20; j++) {
+                    this.drops[dropIndex].chars.push(this.chars[Math.floor(Math.random() * this.chars.length)]);
+                }
+            }
+        }
+    }
+
+    setColor(color) {
+        this.baseColor = color;
+    }
+
+    trigger() {
+        // Trigger glow effect
+        this.glowIntensity = 1.0;
+    }
+
+    update(deltaTime) {
+        // Update drops
+        for (let i = 0; i < this.drops.length; i++) {
+            this.drops[i].y += this.drops[i].speed * deltaTime * 0.1;
+
+            // Reset drop when it goes off screen
+            if (this.drops[i].y > this.canvas.height + 100) {
+                this.drops[i].y = -100;
+                this.drops[i].speed = 0.3 + Math.random() * 0.7;
+                this.drops[i].brightness = 0.3 + Math.random() * 0.7;
+
+                // Randomize characters
+                for (let j = 0; j < this.drops[i].chars.length; j++) {
+                    if (Math.random() < 0.1) {
+                        this.drops[i].chars[j] = this.chars[Math.floor(Math.random() * this.chars.length)];
+                    }
+                }
+            }
+
+            // Occasionally change a character
+            if (Math.random() < 0.02) {
+                const charIndex = Math.floor(Math.random() * this.drops[i].chars.length);
+                this.drops[i].chars[charIndex] = this.chars[Math.floor(Math.random() * this.chars.length)];
+            }
+        }
+
+        // Fade glow
+        if (this.glowIntensity > 0) {
+            this.glowIntensity -= deltaTime * 0.002;
+            if (this.glowIntensity < 0) this.glowIntensity = 0;
+        }
+    }
+
+    draw() {
+        this.ctx.save();
+        this.ctx.font = '14px monospace';
+        this.ctx.textAlign = 'center';
+
+        for (let i = 0; i < this.drops.length; i++) {
+            const drop = this.drops[i];
+            const x = i * 20 + 10;
+
+            // Draw trail of characters
+            for (let j = 0; j < drop.chars.length; j++) {
+                const y = drop.y - j * 20;
+
+                // Skip if above canvas
+                if (y < -20) continue;
+                if (y > this.canvas.height + 20) break;
+
+                // Calculate alpha based on position in trail (fade toward the back)
+                const trailAlpha = (1 - (j / drop.chars.length)) * drop.brightness;
+
+                // Add glow effect
+                const glowBoost = this.glowIntensity * 0.7;
+                const alpha = Math.min(1, trailAlpha + glowBoost);
+
+                // Leading character is brighter
+                if (j === 0) {
+                    this.ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, alpha * 1.5)})`;
+                    this.ctx.shadowBlur = 10 + this.glowIntensity * 20;
+                    this.ctx.shadowColor = this.baseColor;
+                } else {
+                    // Parse color and add alpha
+                    const rgb = this.hexToRgb(this.baseColor);
+                    this.ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha * 0.6})`;
+                    this.ctx.shadowBlur = 5 + this.glowIntensity * 10;
+                    this.ctx.shadowColor = this.baseColor;
+                }
+
+                this.ctx.fillText(drop.chars[j], x, y);
+            }
+        }
+
+        this.ctx.shadowBlur = 0;
+        this.ctx.restore();
+    }
+
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 0, g: 255, b: 255 };
+    }
+}
+
+// ============================================================================
 // MENU BACKGROUND
 // ============================================================================
 
@@ -1425,12 +1577,16 @@ class MenuBackground {
         this.x = this.canvas.width / 2;
         this.y = this.canvas.height / 2 - 50; // Slightly above center
 
+        // Matrix code rain
+        this.matrixRain = new MatrixRain(this.canvas);
+
         // Handle window resize
         window.addEventListener('resize', () => {
             this.canvas.width = window.innerWidth;
             this.canvas.height = window.innerHeight;
             this.x = this.canvas.width / 2;
             this.y = this.canvas.height / 2 - 50;
+            this.matrixRain.resize(this.canvas.width, this.canvas.height);
         });
     }
 
@@ -1440,6 +1596,18 @@ class MenuBackground {
         this.colorPhase = (this.colorPhase + 0.005) % this.colors.length;
         this.gridOffset = (this.gridOffset + 0.5) % 100;
         this.scanlineOffset = (this.scanlineOffset + 2) % this.canvas.height;
+
+        // Update matrix rain
+        const colorIndex = Math.floor(this.colorPhase);
+        const nextColorIndex = (colorIndex + 1) % this.colors.length;
+        const t = this.colorPhase - colorIndex;
+        const color = this.interpolateColor(
+            this.colors[colorIndex],
+            this.colors[nextColorIndex],
+            t
+        );
+        this.matrixRain.setColor(color);
+        this.matrixRain.update(deltaTime);
 
         // Morph to next shape
         if (this.shapeTimer >= this.shapeInterval) {
@@ -1455,6 +1623,9 @@ class MenuBackground {
         // Clear canvas
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw matrix code rain (in background)
+        this.matrixRain.draw();
 
         // Draw perspective grid
         this.drawPerspectiveGrid();
@@ -1721,6 +1892,7 @@ class Game {
         this.laserBeams = []; // For Track 2 lasers
         this.blackHole = null; // Black hole effect during shape swap
         this.screenFlashAlpha = 0; // Screen flash effect for laser fire
+        this.levelUpGlowAlpha = 0; // Screen glow on level up
 
         // Initialize sound system
         this.soundSystem = new SoundSystem();
@@ -1729,6 +1901,9 @@ class Game {
         // Initialize menu background
         this.menuBackground = new MenuBackground();
         this.menuBackground.show();
+
+        // Initialize matrix code rain for gameplay
+        this.matrixRain = new MatrixRain(this.canvas);
 
         this.mouseX = 0;
         this.mouseY = 0;
@@ -1874,6 +2049,10 @@ class Game {
         document.getElementById('menu-overlay').classList.remove('active');
         document.getElementById('gameover-overlay').classList.remove('active');
         document.getElementById('pause-overlay').classList.remove('active');
+
+        // Trigger menu background matrix rain glow on game start
+        this.menuBackground.matrixRain.trigger();
+
         this.menuBackground.hide();
 
         this.updateUI();
@@ -1979,6 +2158,9 @@ class Game {
 
         this.lastShapeSwap = now;
         this.updateShapePool();
+
+        // Trigger matrix rain glow on shape swap
+        this.matrixRain.trigger();
     }
 
     generateBlocks() {
@@ -2056,6 +2238,23 @@ class Game {
             this.screenFlashAlpha -= deltaTime * 0.008; // Fade out over ~200ms
             if (this.screenFlashAlpha < 0) this.screenFlashAlpha = 0;
         }
+
+        // Update level up glow (fade out)
+        if (this.levelUpGlowAlpha > 0) {
+            this.levelUpGlowAlpha -= deltaTime * 0.003; // Fade out over ~500ms
+            if (this.levelUpGlowAlpha < 0) this.levelUpGlowAlpha = 0;
+        }
+
+        // Update matrix rain with powerup-based colors
+        let rainColor = COLORS.cyan; // Default
+        if (this.activePowerups.has('power')) rainColor = COLORS.yellow;
+        else if (this.activePowerups.has('shield')) rainColor = COLORS.green;
+        else if (this.activePowerups.has('storm')) rainColor = COLORS.purple;
+        else if (this.activePowerups.has('regen')) rainColor = COLORS.magenta;
+        else if (this.activePowerups.has('multiply')) rainColor = COLORS.orange;
+
+        this.matrixRain.setColor(rainColor);
+        this.matrixRain.update(deltaTime);
 
         // Update black hole effect
         if (this.blackHole) {
@@ -2687,6 +2886,12 @@ class Game {
         // Show level up text
         this.floatingTexts.push(new FloatingText(centerX, centerY, 'LEVEL ' + this.level, COLORS.yellow));
 
+        // Trigger level up glow effect
+        this.levelUpGlowAlpha = 0.25;
+
+        // Trigger matrix rain glow
+        this.matrixRain.trigger();
+
         this.updateUI();
     }
 
@@ -2807,6 +3012,9 @@ class Game {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+        // Draw matrix code rain (in background)
+        this.matrixRain.draw();
+
         // Draw next shape preview (behind main shape) - shows upcoming shape from pool
         const centerX = CANVAS_WIDTH / 2;
         const centerY = CANVAS_HEIGHT / 2;
@@ -2864,6 +3072,15 @@ class Game {
             this.ctx.save();
             this.ctx.globalAlpha = this.screenFlashAlpha;
             this.ctx.fillStyle = '#fff';
+            this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            this.ctx.restore();
+        }
+
+        // Draw level up glow effect
+        if (this.levelUpGlowAlpha > 0) {
+            this.ctx.save();
+            this.ctx.globalAlpha = this.levelUpGlowAlpha;
+            this.ctx.fillStyle = '#ff0'; // Yellow glow for level up
             this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             this.ctx.restore();
         }
